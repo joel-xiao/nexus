@@ -35,8 +35,8 @@ cargo test
 
 详细测试文档请参阅：[`tests/README.md`](tests/README.md)
 
-## 📚 文档
-
+## 📚 文
+- [`docs/QUICKSTART.md`](docs/QUICKSTART.md) - QUICKSTART
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - 架构快速参考
 - [`docs/ARCHITECTURE_DESIGN.md`](docs/ARCHITECTURE_DESIGN.md) - 详细架构设计
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) - 部署指南
