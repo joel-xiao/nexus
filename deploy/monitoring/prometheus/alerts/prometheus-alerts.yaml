@@ -1,0 +1,66 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nexus-alerts
+  namespace: nexus
+spec:
+  groups:
+  - name: nexus
+    interval: 30s
+    rules:
+    - alert: HighErrorRate
+      expr: rate(nexus_adapter_errors_total[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+        component: adapter
+      annotations:
+        summary: "高错误率告警"
+        description: "适配器错误率超过阈值: {{ $value }} errors/s"
+        runbook_url: "https://docs.example.com/runbooks/high-error-rate"
+
+    - alert: HighLatency
+      expr: histogram_quantile(0.95, nexus_http_request_duration_seconds_bucket) > 5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "高延迟告警"
+        description: "95分位延迟: {{ $value }}s"
+
+    - alert: ServiceDown
+      expr: up{job="nexus"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "服务宕机"
+        description: "Forerunner 服务已宕机超过 1 分钟"
+
+    - alert: HighMemoryUsage
+      expr: (container_memory_usage_bytes{pod=~"nexus-.*"} / container_spec_memory_limit_bytes) > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "内存使用率过高"
+        description: "Pod {{ $labels.pod }} 内存使用率: {{ $value | humanizePercentage }}"
+
+    - alert: HighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{pod=~"nexus-.*"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "CPU 使用率过高"
+        description: "Pod {{ $labels.pod }} CPU 使用率: {{ $value | humanizePercentage }}"
+
+    - alert: RateLimitExceeded
+      expr: increase(nexus_rate_limit_exceeded_total[5m]) > 10
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "限流触发频繁"
+        description: "过去 5 分钟内限流触发 {{ $value }} 次"
+

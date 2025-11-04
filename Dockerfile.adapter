@@ -1,0 +1,41 @@
+# Adapter Sidecar 专用 Dockerfile
+FROM rust:1.75 as builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release && rm -rf src
+
+COPY src ./src
+# 注意：这里可以构建只包含 adapter 相关代码的版本
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/target/release/nexus /app/nexus
+
+RUN useradd -m -u 1000 adapter && \
+    chown -R adapter:adapter /app
+
+USER adapter
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+CMD ["./nexus"]
+

@@ -1,0 +1,15 @@
+target/
+.git/
+.gitignore
+*.md
+*.log
+.env
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+deploy/
+adapter_config_example.json
+

@@ -1,0 +1,32 @@
+# Rust 编译产物
+/target/
+**/*.rs.bk
+
+# 日志文件
+*.log
+nexus.log
+
+# IDE 配置文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 环境变量文件
+.env
+.env.local
+
+# 临时文件
+*.orig
+*.tmp
+.cache/
+
+# 测试覆盖率报告
+tarpaulin-report.html
+coverage/
+
+# 其他
+*.bak
+*.backup 

@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-redis
+  namespace: nexus
+  labels:
+    app: nexus-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus-redis
+  template:
+    metadata:
+      labels:
+        app: nexus-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-redis
+  namespace: nexus
+spec:
+  selector:
+    app: nexus-redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP
+

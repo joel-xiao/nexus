@@ -1,0 +1,64 @@
+{
+  "version": "1.0.0",
+  "adapters": {
+    "openai-custom": {
+      "name": "openai-custom",
+      "api_key": "sk-your-api-key-here",
+      "model": "gpt-4",
+      "base_url": "https://api.openai.com",
+      "enabled": true,
+      "metadata": {
+        "endpoint_template": "/v1/chat/completions",
+        "method": "POST",
+        "auth_type": "bearer",
+        "auth_header": "Authorization",
+        "model_field": "model",
+        "message_field": "messages",
+        "response_path": "choices.0.message.content",
+        "body_template": {
+          "model": "{model}",
+          "messages": [
+            {
+              "role": "user",
+              "content": "{prompt}"
+            }
+          ],
+          "temperature": 0.7
+        },
+        "rate_limit_rps": 10,
+        "rate_limit_rpm": 60,
+        "rate_limit_rph": 1000,
+        "rate_limit_enabled": true,
+        "max_concurrent": 5,
+        "concurrency_enabled": true,
+        "input_price_per_1k": 0.03,
+        "output_price_per_1k": 0.06,
+        "billing_enabled": true
+      }
+    },
+    "custom-llm": {
+      "name": "custom-llm",
+      "api_key": "your-api-key",
+      "model": "custom-model-v1",
+      "base_url": "https://api.example.com",
+      "enabled": true,
+      "metadata": {
+        "endpoint_template": "/v1/chat",
+        "method": "POST",
+        "auth_type": "header",
+        "auth_header": "X-API-Key",
+        "model_field": "model_name",
+        "message_field": "text",
+        "response_path": "result.text",
+        "rate_limit_rps": 5,
+        "rate_limit_rpm": 100,
+        "max_concurrent": 3,
+        "billing_enabled": false
+      }
+    }
+  },
+  "prompts": {},
+  "feature_flags": {},
+  "routing_rules": []
+}
+

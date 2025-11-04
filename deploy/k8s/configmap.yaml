@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexus-config
+  namespace: nexus
+data:
+  LOG_FORMAT: "json"
+  RUST_LOG: "info"
+  REDIS_URL: "redis://nexus-redis:6379"
+  JAEGER_ENDPOINT: "http://nexus-jaeger-collector:4317"
+

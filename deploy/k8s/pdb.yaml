@@ -1,0 +1,12 @@
+# Pod Disruption Budget - 确保高可用性
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nexus-pdb
+  namespace: nexus
+spec:
+  minAvailable: 2  # 至少保持 2 个 Pod 运行
+  selector:
+    matchLabels:
+      app: nexus
+

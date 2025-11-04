@@ -1,0 +1,95 @@
+# 使用 Argo Rollouts 进行蓝绿部署和金丝雀发布
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: nexus-rollout
+  namespace: nexus
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: nexus
+  template:
+    metadata:
+      labels:
+        app: nexus
+    spec:
+      containers:
+      - name: nexus
+        image: nexus:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: REDIS_URL
+  strategy:
+    blueGreen:
+      # 蓝绿部署配置
+      activeService: nexus-active
+      previewService: nexus-preview
+      autoPromotionEnabled: false  # 手动批准升级
+      scaleDownDelaySeconds: 300   # 5分钟后清理旧版本
+      prePromotionAnalysis:
+        templates:
+        - templateName: success-rate
+        args:
+        - name: service-name
+          value: nexus-preview
+      postPromotionAnalysis:
+        templates:
+        - templateName: success-rate
+        args:
+        - name: service-name
+          value: nexus-active
+    # 或者使用 canary（金丝雀发布）
+    # canary:
+    #   steps:
+    #   - setWeight: 10    # 10% 流量
+    #   - pause: {duration: 5m}
+    #   - setWeight: 25    # 25% 流量
+    #   - pause: {duration: 5m}
+    #   - setWeight: 50    # 50% 流量
+    #   - pause: {duration: 5m}
+    #   - setWeight: 100   # 100% 流量
+    #   analysis:
+    #     templates:
+    #     - templateName: success-rate
+    #     startingStep: 2
+    #     args:
+    #     - name: service-name
+    #       value: nexus
+
+---
+# 活动服务（当前生产版本）
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-active
+  namespace: nexus
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 3000
+  selector:
+    app: nexus
+
+---
+# 预览服务（新版本测试）
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-preview
+  namespace: nexus
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 3000
+  selector:
+    app: nexus
+
