@@ -41,8 +41,8 @@ impl AdapterRegistry {
             return Ok(());
         }
 
-        // 创建通用适配器
-        let adapter = AdapterFactory::create_generic_adapter(config.clone())?;
+        // 智能创建适配器（自动选择专用或通用实现）
+        let adapter = AdapterFactory::create_adapter(config.clone())?;
 
         // 创建限流器
         let rate_limiter = AdapterFactory::create_rate_limiter(&config.metadata);

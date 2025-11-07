@@ -1,4 +1,8 @@
 use crate::domain::adapters::generic::{GenericAdapter, RequestConfig, AuthType};
+use crate::domain::adapters::registry::Adapter;
+use crate::domain::adapters::implementations::{
+    OpenAIAdapter, DeepSeekAdapter, ZhipuAdapter, DoubaoAdapter, QianwenAdapter
+};
 use crate::infrastructure::adapter::{rate_limit::RateLimiter, billing::BillingTracker, guard::ConcurrencyGuard};
 use crate::domain::config::manager::AdapterConfig;
 use std::sync::Arc;
@@ -8,8 +12,56 @@ use tracing::info;
 pub struct AdapterFactory;
 
 impl AdapterFactory {
+    /// 从配置创建适配器（智能选择专用或通用实现）
+    pub fn create_adapter(config: AdapterConfig) -> anyhow::Result<Arc<dyn Adapter + Send + Sync>> {
+        let api_key = config.api_key
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("API key is required for adapter: {}", config.name))?;
+        
+        // 根据名称或类型选择专用适配器
+        let adapter: Arc<dyn Adapter + Send + Sync> = match config.name.as_str() {
+            "openai" => {
+                info!("Creating built-in OpenAI adapter");
+                Arc::new(OpenAIAdapter::new(api_key, config.model.clone()))
+            },
+            "deepseek" => {
+                info!("Creating built-in DeepSeek adapter");
+                Arc::new(DeepSeekAdapter::new(api_key, config.model.clone()))
+            },
+            "zhipu" => {
+                info!("Creating built-in Zhipu adapter");
+                Arc::new(ZhipuAdapter::new(api_key, config.model.clone()))
+            },
+            "doubao" => {
+                info!("Creating built-in Doubao adapter");
+                Arc::new(DoubaoAdapter::new(api_key, config.model.clone()))
+            },
+            "qianwen" => {
+                // 检查是否使用兼容模式
+                if let Some(base_url) = &config.base_url {
+                    if base_url.contains("compatible-mode") {
+                        info!("Creating generic adapter for Qianwen (OpenAI-compatible mode)");
+                        Self::create_generic_adapter(config)?
+                    } else {
+                        info!("Creating built-in Qianwen adapter (native API)");
+                        Arc::new(QianwenAdapter::new(api_key, config.model.clone()))
+                    }
+                } else {
+                    info!("Creating built-in Qianwen adapter (native API)");
+                    Arc::new(QianwenAdapter::new(api_key, config.model.clone()))
+                }
+            },
+            _ => {
+                info!("Creating generic adapter for: {}", config.name);
+                Self::create_generic_adapter(config)?
+            }
+        };
+
+        Ok(adapter)
+    }
+
     /// 从配置创建通用适配器
-    pub fn create_generic_adapter(config: AdapterConfig) -> anyhow::Result<Arc<GenericAdapter>> {
+    pub fn create_generic_adapter(config: AdapterConfig) -> anyhow::Result<Arc<dyn Adapter + Send + Sync>> {
         let api_key = config.api_key
             .ok_or_else(|| anyhow::anyhow!("API key is required for adapter: {}", config.name))?;
         
@@ -31,7 +83,7 @@ impl AdapterFactory {
         );
 
         info!("Created generic adapter: {}", config.name);
-        Ok(Arc::new(adapter))
+        Ok(Arc::new(adapter) as Arc<dyn Adapter + Send + Sync>)
     }
 
     fn parse_request_config(metadata: &std::collections::HashMap<String, serde_json::Value>) -> anyhow::Result<RequestConfig> {
