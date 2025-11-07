@@ -1,0 +1,22 @@
+[package]
+name = "agentflow"
+version = "0.1.0"
+edition = "2021"
+authors = ["Nexus Team"]
+description = "Lightweight multi-agent orchestration and workflow framework"
+license = "MIT"
+keywords = ["agent", "orchestration", "workflow", "multi-agent", "ai"]
+categories = ["algorithms", "asynchronous"]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }

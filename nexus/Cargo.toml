@@ -1,0 +1,46 @@
+[package]
+name = "nexus"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 本地工具依赖
+llm-adapter = { path = "../llm-adapter" }
+agentflow = { path = "../agentflow" }
+
+# 使用 workspace 依赖
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+dashmap = { workspace = true }
+md5 = { workspace = true }
+regex = { workspace = true }
+
+# Nexus 特有依赖
+axum = "0.8.6"
+tokio-stream = "0.1"
+prometheus = "0.14"
+handlebars = "6.3.2"
+futures = "0.3"
+redis = { version = "0.32.7", features = ["tokio-comp", "connection-manager"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+tower-http = { version = "0.6", features = ["trace"] }
+utoipa = { version = "5.4.0", features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+
+[dev-dependencies]
+axum-test = "18.2"
+tokio-test = "0.4"
+http-body-util = "0.1"
