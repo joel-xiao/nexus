@@ -1,4 +1,4 @@
-use llm_adapter::{AdapterRegistry, providers::MockAdapter};
+use llm_adapter::AdapterRegistry;
 use crate::infrastructure::messaging::mcp::bus::McpBus;
 use crate::application::Planner;
 use crate::application::PromptStore;
@@ -41,8 +41,15 @@ impl AppState {
         let config_manager_clone = config_manager.clone();
         let registry_for_spawn = registry_clone.clone();
         tokio::spawn(async move {
-            // 注册 Mock 适配器用于测试
-            registry_for_spawn.write().await.register("mock", Arc::new(MockAdapter::new("mock".to_string()))).await;
+            #[cfg(test)]
+            {
+                use llm_adapter::providers::MockAdapter;
+                registry_for_spawn
+                    .write()
+                    .await
+                    .register("mock", Arc::new(MockAdapter::new("mock".to_string())))
+                    .await;
+            }
             
             // 从配置加载适配器
             let config = config_manager_clone.get_config().await;

@@ -5,6 +5,7 @@ use crate::infrastructure::queue::task::{Task, TaskPriority};
 use crate::monitor::event::{Event, EventLevel};
 use crate::application::postprocessor::ProcessingContext;
 use llm_adapter::config::AdapterConfig;
+use tracing::warn;
 use std::sync::Arc;
 use tracing::{info, error};
 use utoipa::ToSchema;
@@ -93,7 +94,10 @@ pub async fn invoke_handler(
             } else {
                 match state.config_manager.router().select_model(user_id, None).await {
                     Some((_model, adapter)) => adapter,
-                    None => "mock".to_string(),
+                    None => {
+                        warn!("No adapter available from routing configuration");
+                        return error_response("No adapter available. Please specify an adapter or configure routing.");
+                    }
                 }
             }
         }
