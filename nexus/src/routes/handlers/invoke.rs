@@ -4,6 +4,7 @@ use crate::state::AppState;
 use crate::infrastructure::queue::task::{Task, TaskPriority};
 use crate::monitor::event::{Event, EventLevel};
 use crate::application::postprocessor::ProcessingContext;
+use llm_adapter::config::AdapterConfig;
 use std::sync::Arc;
 use tracing::{info, error};
 use utoipa::ToSchema;
@@ -11,7 +12,9 @@ use utoipa::ToSchema;
 #[derive(Deserialize, ToSchema)]
 #[schema(example = json!({
     "input": "Hello, world!",
-    "adapter": "mock",
+    "adapter": "openai",
+    "api_key": "sk-xxxx",
+    "model": "gpt-4o-mini",
     "user_id": "user123"
 }))]
 pub struct InvokeRequest {
@@ -22,6 +25,18 @@ pub struct InvokeRequest {
     #[serde(default)]
     #[schema(example = "mock")]
     pub adapter: Option<String>,
+    /// 可选的 API Key，当请求中包含时会动态注册适配器
+    #[serde(default)]
+    #[schema(example = "sk-xxxx")]
+    pub api_key: Option<String>,
+    /// 可选的自定义模型名称
+    #[serde(default)]
+    #[schema(example = "gpt-4o-mini")]
+    pub model: Option<String>,
+    /// 可选的基础地址（针对兼容模式）
+    #[serde(default)]
+    #[schema(example = "https://api.openai.com")]
+    pub base_url: Option<String>,
     /// 可选的用户ID，用于路由策略
     #[serde(default)]
     #[schema(example = "user123")]
@@ -56,6 +71,52 @@ pub async fn invoke_handler(
         serde_json::json!({"input": payload.input}),
     );
     
+    let user_id = payload.user_id.as_deref();
+
+    let mut adapter_candidate = payload.adapter.clone();
+    let mut inline_api_key = payload.api_key.clone();
+
+    if inline_api_key.is_none() {
+        if let Some(ref name) = adapter_candidate {
+            if is_potential_api_key(name) {
+                inline_api_key = Some(name.clone());
+                adapter_candidate = None;
+            }
+        }
+    }
+
+    let adapter_name = match adapter_candidate {
+        Some(name) => name,
+        None => {
+            if inline_api_key.is_some() {
+                "openai".to_string()
+            } else {
+                match state.config_manager.router().select_model(user_id, None).await {
+                    Some((_model, adapter)) => adapter,
+                    None => "mock".to_string(),
+                }
+            }
+        }
+    };
+
+    if let Some(api_key) = inline_api_key {
+        let mut config = AdapterConfig::new(adapter_name.clone());
+        config.api_key = Some(api_key);
+
+        if let Some(model) = payload.model.clone() {
+            config.model = Some(model);
+        }
+
+        if let Some(base_url) = payload.base_url.clone() {
+            config.base_url = Some(base_url);
+        }
+
+        if let Err(e) = state.adapter_registry.write().await.register_from_config(config).await {
+            error!("Failed to register adapter dynamically: {}", e);
+            return error_response("Failed to register adapter from request");
+        }
+    }
+    
     let tasks = state.planner.split_task(&payload.input).await;
     let task_messages: Vec<serde_json::Value> = tasks.iter()
         .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
@@ -88,7 +149,7 @@ pub async fn invoke_handler(
     
     let task_payload = serde_json::json!({
         "input": final_prompt,
-        "adapter": payload.adapter.as_deref().unwrap_or("mock"),
+        "adapter": adapter_name.clone(),
     });
     
     let queue_task = Task::new(
@@ -112,16 +173,6 @@ pub async fn invoke_handler(
         EventLevel::Info,
     );
     state.event_bus.publish(event);
-    
-    let user_id = payload.user_id.as_deref();
-    let adapter_name = if let Some(adapter) = payload.adapter.as_deref() {
-        adapter.to_string()
-    } else {
-        match state.config_manager.router().select_model(user_id, None).await {
-            Some((_model, adapter)) => adapter,
-            None => "mock".to_string()
-        }
-    };
     
     let mut context = ProcessingContext::new(
         payload.user_id.clone(),
@@ -180,4 +231,8 @@ pub async fn invoke_handler(
         tasks: task_messages,
         adapter_used: adapter_name.to_string(),
     })
+}
+
+fn is_potential_api_key(value: &str) -> bool {
+    value.starts_with("sk-") || value.len() >= 40 && value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
