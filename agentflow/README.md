@@ -110,37 +110,36 @@ let workflow = Workflow::new(config, vec![step1], "plan".to_string());
 
 ## 与其他工具集成
 
-AgentFlow 可以与任意 LLM 调用库配合使用，例如将 `llm-adapter` 的 Adapter 包装为 Agent：
+AgentFlow 通过 `LLMProvider` trait 支持任意 LLM 调用库。你可以：
+
+1. **使用 llm-adapter** - 通过桥接实现（见 `nexus` 项目示例）
+2. **使用其他 LLM SDK** - 实现 `LLMProvider` trait
+3. **自定义实现** - 完全自定义的 Agent，不依赖 LLM
+
+### 实现自定义 LLM 提供者
 
 ```rust
-struct LLMAgent {
-    config: AgentConfig,
-    adapter: Arc<dyn llm_adapter::Adapter>,
+use agentflow::{LLMProvider, LLMInvokeOptions};
+use async_trait::async_trait;
+
+struct MyLLMProvider {
+    // 你的 LLM 客户端
 }
 
 #[async_trait]
-impl Agent for LLMAgent {
-    async fn process(
-        &self,
-        message: AgentMessage,
-        _context: &mut AgentContext,
-    ) -> anyhow::Result<AgentResponse> {
-        let prompt = format!("{}\n{}",
-            self.config().system_prompt,
-            message.content
-        );
-        let result = self.adapter.invoke(&prompt).await?;
-        let response_msg = AgentMessage::new(
-            self.config.id.clone(),
-            self.config.name.clone(),
-            message.sender_id.into(),
-            result,
-            MessageType::Result,
-        );
-        Ok(AgentResponse::new(response_msg))
+impl LLMProvider for MyLLMProvider {
+    async fn invoke(&self, prompt: &str, options: &LLMInvokeOptions) -> anyhow::Result<String> {
+        // 调用你的 LLM API
+        Ok("Response".to_string())
+    }
+
+    fn name(&self) -> &str {
+        "my_llm"
     }
 }
 ```
+
+详细扩展指南请参考 [EXTENDING.md](./EXTENDING.md)。
 
 ## 测试
 

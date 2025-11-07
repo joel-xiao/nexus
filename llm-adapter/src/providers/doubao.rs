@@ -1,7 +1,7 @@
 use crate::registry::Adapter;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[derive(Clone)]
 pub struct DoubaoAdapter {
@@ -51,19 +51,18 @@ impl Adapter for DoubaoAdapter {
 
     async fn invoke(&self, prompt: &str) -> anyhow::Result<String> {
         info!("Calling Doubao with model: {}", self.model);
-        
+
         let req = DoubaoRequest {
             model: self.model.clone(),
-            messages: vec![
-                Message {
-                    role: "user".to_string(),
-                    content: prompt.to_string(),
-                }
-            ],
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+            }],
             temperature: 0.7,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/v1/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
             .json(&req)
@@ -96,4 +95,3 @@ impl DoubaoAdapter {
         }
     }
 }
-

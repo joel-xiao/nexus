@@ -1,47 +1,50 @@
 #!/usr/bin/env bash
+# agentflow 测试脚本
+
 set -euo pipefail
 
-BLUE="[0;34m"
-YELLOW="[1;33m"
-GREEN="[0;32m"
-NC="[0m"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-function info() {
-  echo -e "${BLUE}➤${NC} $1"
+RUN_UNIT=true
+RUN_INTEGRATION=true
+VERBOSE=false
+FILTER=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --unit) RUN_INTEGRATION=false; shift ;;
+        --integration) RUN_UNIT=false; shift ;;
+        --verbose) VERBOSE=true; shift ;;
+        --filter) FILTER="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+cd "$MODULE_DIR"
+
+CARGO_TEST_ARGS=()
+[[ "$VERBOSE" == "true" ]] && CARGO_TEST_ARGS+=(-- --nocapture)
+[[ -n "$FILTER" ]] && CARGO_TEST_ARGS+=(-- --exact "$FILTER")
+
+exit_code=0
+
+[[ "$RUN_UNIT" == "true" ]] && {
+    echo "运行单元测试..."
+    if [[ ${#CARGO_TEST_ARGS[@]} -gt 0 ]]; then
+        cargo test --lib "${CARGO_TEST_ARGS[@]}" || exit_code=1
+    else
+        cargo test --lib || exit_code=1
+    fi
 }
 
-function success() {
-  echo -e "${GREEN}✔${NC} $1"
+[[ "$RUN_INTEGRATION" == "true" ]] && {
+    echo "运行集成测试..."
+    if [[ ${#CARGO_TEST_ARGS[@]} -gt 0 ]]; then
+        cargo test --tests "${CARGO_TEST_ARGS[@]}" || exit_code=1
+    else
+        cargo test --tests || exit_code=1
+    fi
 }
 
-info "运行 AgentFlow 单元测试"
-cargo test --lib -- --nocapture
-
-info "运行 AgentFlow 集成测试"
-cargo test --tests -- --nocapture
-
-if [[ "${1:-}" == "--performance" ]]; then
-  info "运行性能测试"
-  found=false
-  if [[ -d tests/performance ]]; then
-    for file in tests/performance/*_test.rs; do
-      if [[ -f $file ]]; then
-        found=true
-        name=$(basename "$file" .rs)
-        info "  → $name"
-        cargo test --test "$name" -- --nocapture || true
-      fi
-    done
-  fi
-  if ! $found; then
-    info "  (未找到性能测试文件)"
-  fi
-fi
-
-if command -v cargo-tarpaulin >/dev/null 2>&1; then
-  info "生成覆盖率报告"
-  cargo tarpaulin --out Html --output-dir ./target/coverage
-  success "覆盖率报告: target/coverage/tarpaulin-report.html"
-fi
-
-success "AgentFlow 测试全部通过"
+exit $exit_code

@@ -1,6 +1,6 @@
 use crate::infrastructure::cache::RedisCache;
-use serde::{Serialize, Deserialize};
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -29,24 +29,23 @@ impl SessionCache {
     }
 
     pub async fn get(&self, session_id: &str) -> Result<Option<Session>> {
-        // 先尝试从 Redis 获取
         if let Ok(Some(session)) = self.redis.get::<Session>(session_id).await {
             return Ok(Some(session));
         }
-        
-        // 回退到内存
+
         let memory = self.memory.read().await;
         Ok(memory.get(session_id).cloned())
     }
 
     pub async fn set(&self, session: &Session, ttl_seconds: Option<u64>) -> Result<()> {
-        // 写入 Redis
-        let _ = self.redis.set(&session.session_id, session, ttl_seconds).await;
-        
-        // 同时写入内存作为备份
+        let _ = self
+            .redis
+            .set(&session.session_id, session, ttl_seconds)
+            .await;
+
         let mut memory = self.memory.write().await;
         memory.insert(session.session_id.clone(), session.clone());
-        
+
         Ok(())
     }
 
@@ -63,4 +62,3 @@ impl Default for SessionCache {
         Self::new(None)
     }
 }
-

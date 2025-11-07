@@ -1,6 +1,6 @@
 use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MetricValue {
@@ -37,16 +37,13 @@ impl Metrics {
     }
 
     pub fn record_histogram(&self, name: &str, value: f64) {
-        self.histograms
+        let mut vec = self
+            .histograms
             .entry(name.to_string())
-            .or_insert_with(Vec::new)
-            .push(value);
-        
-        // 限制直方图大小
-        if let Some(mut vec) = self.histograms.get_mut(name) {
-            if vec.len() > 1000 {
-                vec.remove(0);
-            }
+            .or_insert_with(Vec::new);
+        vec.push(value);
+        if vec.len() > 1000 {
+            vec.remove(0);
         }
     }
 
@@ -73,10 +70,10 @@ impl Metrics {
                     p99: 0.0,
                 };
             }
-            
+
             let mut sorted = v.clone();
-            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
             let min = sorted[0];
             let max = sorted[count - 1];
             let sum: f64 = v.iter().sum();
@@ -84,7 +81,7 @@ impl Metrics {
             let p50 = sorted[count / 2];
             let p95 = sorted[(count as f64 * 0.95) as usize];
             let p99 = sorted[(count as f64 * 0.99) as usize];
-            
+
             HistogramStats {
                 count,
                 min,
@@ -99,8 +96,16 @@ impl Metrics {
 
     pub fn snapshot(&self) -> MetricsSnapshot {
         MetricsSnapshot {
-            counters: self.counters.iter().map(|e| (e.key().clone(), *e.value())).collect(),
-            gauges: self.gauges.iter().map(|e| (e.key().clone(), *e.value())).collect(),
+            counters: self
+                .counters
+                .iter()
+                .map(|e| (e.key().clone(), *e.value()))
+                .collect(),
+            gauges: self
+                .gauges
+                .iter()
+                .map(|e| (e.key().clone(), *e.value()))
+                .collect(),
         }
     }
 }
@@ -127,4 +132,3 @@ impl Default for Metrics {
         Self::new()
     }
 }
-

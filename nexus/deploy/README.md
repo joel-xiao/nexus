@@ -30,7 +30,7 @@ kubectl apply -f deploy/k8s/configmap.yaml
 # 部署 Redis
 kubectl apply -f deploy/k8s/redis-deployment.yaml
 
-# 部署 Forerunner
+# 部署 Nexus
 kubectl apply -f deploy/k8s/deployment.yaml
 
 # 部署 Ingress（可选）

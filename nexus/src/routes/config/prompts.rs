@@ -1,9 +1,9 @@
-use axum::{Router, Extension};
-use axum::routing::{get, delete};
-use utoipa::OpenApi;
 use crate::routes::handlers::config::prompts as handlers;
-use std::sync::Arc;
 use crate::state::AppState;
+use axum::routing::{delete, get};
+use axum::{Extension, Router};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
 pub fn prompts_routes() -> Router {
     Router::new()
@@ -12,13 +12,13 @@ pub fn prompts_routes() -> Router {
         .route("/prompts/{name}", delete(delete_prompt))
 }
 
-/// 列出所有提示词
 #[utoipa::path(
     get,
     path = "/api/config/prompts",
     tag = "config-prompts",
     responses(
-        (status = 200, description = "提示词列表")
+        (status = 200, description = "提示词列表", content_type = "application/json"),
+        (status = 500, description = "服务器错误", body = crate::routes::common::ErrorResponse)
     )
 )]
 pub async fn list_prompts(
@@ -27,7 +27,6 @@ pub async fn list_prompts(
     handlers::list_prompts(Extension(state)).await
 }
 
-/// 获取单个提示词配置
 #[utoipa::path(
     get,
     path = "/api/config/prompts/{name}",
@@ -36,8 +35,8 @@ pub async fn list_prompts(
         ("name" = String, Path, description = "提示词名称")
     ),
     responses(
-        (status = 200, description = "提示词配置详情"),
-        (status = 404, description = "提示词不存在")
+        (status = 200, description = "提示词配置详情", content_type = "application/json"),
+        (status = 404, description = "提示词不存在", body = crate::routes::common::ErrorResponse)
     )
 )]
 pub async fn get_prompt(
@@ -47,7 +46,6 @@ pub async fn get_prompt(
     handlers::get_prompt(Extension(state), axum::extract::Path(name)).await
 }
 
-/// 删除提示词
 #[utoipa::path(
     delete,
     path = "/api/config/prompts/{name}",
@@ -56,7 +54,7 @@ pub async fn get_prompt(
         ("name" = String, Path, description = "提示词名称")
     ),
     responses(
-        (status = 200, description = "成功删除提示词")
+        (status = 200, description = "成功删除提示词", content_type = "application/json")
     )
 )]
 pub async fn delete_prompt(
@@ -73,6 +71,9 @@ pub async fn delete_prompt(
         get_prompt,
         delete_prompt,
     ),
+    components(schemas(
+        crate::routes::common::ErrorResponse,
+    )),
     tags(
         (name = "config-prompts", description = "提示词管理"),
     )

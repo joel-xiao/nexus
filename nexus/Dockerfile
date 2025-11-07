@@ -1,4 +1,7 @@
 # 多阶段构建 Dockerfile
+# 注意：此 Dockerfile 需要从项目根目录构建
+# 构建命令: docker build -f nexus/Dockerfile -t nexus:latest .
+
 FROM rust:1.75 as builder
 
 WORKDIR /app
@@ -9,30 +12,36 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制 Cargo 文件
+# 复制 workspace 根目录的 Cargo 文件
 COPY Cargo.toml Cargo.lock ./
 
+# 复制所有 workspace members
+COPY llm-adapter ./llm-adapter
+COPY agentflow ./agentflow
+COPY nexus/Cargo.toml nexus/Cargo.lock ./nexus/
+
 # 创建 dummy src 目录以缓存依赖
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN mkdir -p nexus/src && echo "fn main() {}" > nexus/src/main.rs
 
 # 构建依赖（缓存层）
-RUN cargo build --release && rm -rf src
+RUN cargo build --release --workspace && rm -rf nexus/src
 
 # 复制源代码
-COPY src ./src
+COPY nexus/src ./nexus/src
 
 # 构建应用
-RUN cargo build --release
+RUN cargo build --release -p nexus
 
 # 运行时镜像
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# 安装运行时依赖
+# 安装运行时依赖和 curl（用于健康检查）
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 从构建阶段复制二进制文件
@@ -48,9 +57,8 @@ USER nexus
 EXPOSE 3000
 
 # 健康检查
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # 启动应用
 CMD ["./nexus"]
-

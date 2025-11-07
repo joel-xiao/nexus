@@ -26,7 +26,6 @@ impl McpBus {
         tasks.insert(id.clone(), message.clone());
         info!("Published message: {}", id);
 
-        // Broadcast to subscribers
         let subscribers = self.subscribers.read().await;
         for (name, tx) in subscribers.iter() {
             if let Err(e) = tx.send(message.clone()).await {
@@ -67,4 +66,3 @@ impl Default for McpBus {
         Self::new()
     }
 }
-

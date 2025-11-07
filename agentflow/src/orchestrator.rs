@@ -1,35 +1,42 @@
-/// Agent 编排器
-/// 
-/// 负责协调多个 Agent 的交互和工作流程
-
-use crate::agent::{AgentFlowAgent, AgentMessage, AgentResponse, AgentContext, MessageType};
+use crate::agent::{AgentContext, AgentFlowAgent, AgentMessage, AgentResponse, MessageType};
 use crate::workflow::{Workflow, WorkflowEngine};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
-/// 编排配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SpeakerSelection {
+    RoundRobin,
+    Random,
+    Manual,
+    Auto,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationConfig {
-    /// 会话ID
     pub session_id: String,
-    /// 最大轮数
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
-    /// 超时时间（秒）
     #[serde(default = "default_timeout")]
     pub timeout_seconds: u64,
-    /// 是否启用自动规划
     #[serde(default)]
     pub auto_planning: bool,
-    /// 是否记录历史
     #[serde(default = "default_true")]
     pub save_history: bool,
-    /// 额外配置
+    #[serde(default = "default_speaker_selection")]
+    pub speaker_selection: SpeakerSelection,
+    #[serde(default)]
+    pub agent_order: Vec<String>,
+    #[serde(default)]
+    pub termination_condition: Option<String>,
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
+}
+
+fn default_speaker_selection() -> SpeakerSelection {
+    SpeakerSelection::RoundRobin
 }
 
 fn default_max_rounds() -> usize {
@@ -52,40 +59,31 @@ impl Default for OrchestrationConfig {
             timeout_seconds: default_timeout(),
             auto_planning: false,
             save_history: true,
+            speaker_selection: SpeakerSelection::RoundRobin,
+            agent_order: Vec::new(),
+            termination_condition: Some("TERMINATE".to_string()),
             metadata: HashMap::new(),
         }
     }
 }
 
-/// 编排结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationResult {
-    /// 会话ID
     pub session_id: String,
-    /// 最终结果
     pub result: String,
-    /// 执行轮数
     pub rounds: usize,
-    /// 是否成功完成
     pub success: bool,
-    /// 参与的 Agent 列表
     pub agents_used: Vec<String>,
-    /// 消息历史
     pub message_history: Vec<AgentMessage>,
-    /// 耗时（秒）
     pub duration_seconds: f64,
-    /// 元数据
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-/// Agent 编排器
 pub struct AgentOrchestrator {
-    /// 注册的 Agent
     agents: Arc<RwLock<HashMap<String, Arc<dyn AgentFlowAgent>>>>,
-    /// 工作流引擎
     workflow_engine: Option<Arc<WorkflowEngine>>,
-    /// 配置
     config: OrchestrationConfig,
+    current_speaker_index: Arc<tokio::sync::Mutex<usize>>,
 }
 
 impl AgentOrchestrator {
@@ -94,10 +92,10 @@ impl AgentOrchestrator {
             agents: Arc::new(RwLock::new(HashMap::new())),
             workflow_engine: None,
             config,
+            current_speaker_index: Arc::new(tokio::sync::Mutex::new(0)),
         }
     }
 
-    /// 注册 Agent
     pub async fn register_agent(&self, agent: Arc<dyn AgentFlowAgent>) {
         let agent_id = agent.id().to_string();
         let mut agents = self.agents.write().await;
@@ -105,31 +103,76 @@ impl AgentOrchestrator {
         info!("Registered agent: {}", agent_id);
     }
 
-    /// 移除 Agent
     pub async fn unregister_agent(&self, agent_id: &str) -> bool {
         let mut agents = self.agents.write().await;
         agents.remove(agent_id).is_some()
     }
 
-    /// 获取 Agent
     pub async fn get_agent(&self, agent_id: &str) -> Option<Arc<dyn AgentFlowAgent>> {
         let agents = self.agents.read().await;
         agents.get(agent_id).cloned()
     }
 
-    /// 列出所有 Agent
     pub async fn list_agents(&self) -> Vec<String> {
         let agents = self.agents.read().await;
         agents.keys().cloned().collect()
     }
 
-    /// 设置工作流引擎
     pub fn with_workflow_engine(mut self, engine: Arc<WorkflowEngine>) -> Self {
         self.workflow_engine = Some(engine);
         self
     }
 
-    /// 执行单轮对话
+    async fn select_next_speaker(&self) -> Option<String> {
+        let agents = self.agents.read().await;
+        let agent_ids: Vec<String> = if !self.config.agent_order.is_empty() {
+            self.config
+                .agent_order
+                .iter()
+                .filter(|id| agents.contains_key(*id))
+                .cloned()
+                .collect()
+        } else {
+            agents.keys().cloned().collect()
+        };
+
+        if agent_ids.is_empty() {
+            return None;
+        }
+
+        match self.config.speaker_selection {
+            SpeakerSelection::RoundRobin => {
+                let mut idx = self.current_speaker_index.lock().await;
+                let selected = agent_ids[*idx % agent_ids.len()].clone();
+                *idx += 1;
+                Some(selected)
+            }
+            SpeakerSelection::Random => {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                std::time::SystemTime::now().hash(&mut hasher);
+                let hash = hasher.finish();
+                let idx = (hash as usize) % agent_ids.len();
+                Some(agent_ids[idx].clone())
+            }
+            SpeakerSelection::Manual | SpeakerSelection::Auto => {
+                let mut idx = self.current_speaker_index.lock().await;
+                let selected = agent_ids[*idx % agent_ids.len()].clone();
+                *idx += 1;
+                Some(selected)
+            }
+        }
+    }
+
+    fn check_termination(&self, message: &str) -> bool {
+        if let Some(ref condition) = self.config.termination_condition {
+            message.to_uppercase().contains(&condition.to_uppercase())
+        } else {
+            false
+        }
+    }
+
     pub async fn execute_round(
         &self,
         message: AgentMessage,
@@ -137,10 +180,8 @@ impl AgentOrchestrator {
     ) -> anyhow::Result<Vec<AgentResponse>> {
         let mut responses = Vec::new();
 
-        // 添加消息到上下文
         context.add_message(message.clone());
 
-        // 如果指定了接收者，直接发送给该 Agent
         if let Some(ref receiver_id) = message.receiver_id {
             if let Some(agent) = self.get_agent(receiver_id).await {
                 debug!("Sending message to specific agent: {}", receiver_id);
@@ -150,15 +191,31 @@ impl AgentOrchestrator {
                 anyhow::bail!("Agent not found: {}", receiver_id);
             }
         } else {
-            // 广播模式：找到所有可以处理的 Agent
-            let agents = self.agents.read().await;
-            for (agent_id, agent) in agents.iter() {
-                if agent.can_handle(&message).await {
-                    debug!("Agent {} can handle the message", agent_id);
-                    match agent.process(message.clone(), context).await {
-                        Ok(response) => responses.push(response),
-                        Err(e) => {
-                            warn!("Agent {} failed to process message: {}", agent_id, e);
+            match self.config.speaker_selection {
+                SpeakerSelection::RoundRobin | SpeakerSelection::Random | SpeakerSelection::Manual => {
+                    if let Some(speaker_id) = self.select_next_speaker().await {
+                        if let Some(agent) = self.get_agent(&speaker_id).await {
+                            debug!("Selected speaker: {}", speaker_id);
+                            match agent.process(message.clone(), context).await {
+                                Ok(response) => responses.push(response),
+                                Err(e) => {
+                                    warn!("Agent {} failed to process message: {}", speaker_id, e);
+                                }
+                            }
+                        }
+                    }
+                }
+                SpeakerSelection::Auto => {
+                    let agents = self.agents.read().await;
+                    for (agent_id, agent) in agents.iter() {
+                        if agent.can_handle(&message).await {
+                            debug!("Agent {} can handle the message", agent_id);
+                            match agent.process(message.clone(), context).await {
+                                Ok(response) => responses.push(response),
+                                Err(e) => {
+                                    warn!("Agent {} failed to process message: {}", agent_id, e);
+                                }
+                            }
                         }
                     }
                 }
@@ -168,7 +225,6 @@ impl AgentOrchestrator {
         Ok(responses)
     }
 
-    /// 执行多轮对话
     pub async fn orchestrate(
         &self,
         initial_message: String,
@@ -179,7 +235,6 @@ impl AgentOrchestrator {
         let mut agents_used = Vec::new();
         let mut current_round = 0;
 
-        // 创建初始消息
         let mut current_message = AgentMessage::new(
             "user".to_string(),
             "User".to_string(),
@@ -193,10 +248,15 @@ impl AgentOrchestrator {
 
         while current_round < self.config.max_rounds {
             current_round += 1;
-            info!("Orchestration round {}/{}", current_round, self.config.max_rounds);
+            info!(
+                "Orchestration round {}/{}",
+                current_round, self.config.max_rounds
+            );
 
-            // 执行当前轮
-            let responses = match self.execute_round(current_message.clone(), &mut context).await {
+            let responses = match self
+                .execute_round(current_message.clone(), &mut context)
+                .await
+            {
                 Ok(responses) => responses,
                 Err(e) => {
                     warn!("Round {} failed: {}", current_round, e);
@@ -209,25 +269,34 @@ impl AgentOrchestrator {
                 break;
             }
 
-            // 处理响应
             let mut should_continue = false;
+            let mut selected_response: Option<AgentResponse> = None;
+
             for response in responses {
-                // 记录使用的 Agent
                 if !agents_used.contains(&response.message.sender_id) {
                     agents_used.push(response.message.sender_id.clone());
                 }
 
-                // 添加响应消息到上下文
                 context.add_message(response.message.clone());
 
-                // 更新最终结果
-                final_result = response.message.content.clone();
+                if self.check_termination(&response.message.content) {
+                    info!("Termination condition met: {}", response.message.content);
+                    final_result = response.message.content.clone();
+                    success = true;
+                    break;
+                }
 
-                // 检查是否需要继续
-                if response.should_continue {
+                if selected_response.is_none() || response.should_continue {
+                    selected_response = Some(response.clone());
+                }
+
+                final_result = response.message.content.clone();
+            }
+
+            if let Some(response) = selected_response {
+                if response.should_continue && !self.check_termination(&response.message.content) {
                     should_continue = true;
-                    
-                    // 如果有指定下一个 Agent，创建新消息
+
                     if let Some(next_agent_id) = response.next_agent_id {
                         current_message = AgentMessage::new(
                             response.message.sender_id,
@@ -237,7 +306,6 @@ impl AgentOrchestrator {
                             MessageType::Task,
                         );
                     } else {
-                        // 广播消息
                         current_message = AgentMessage::new(
                             response.message.sender_id,
                             response.message.sender_name,
@@ -252,7 +320,10 @@ impl AgentOrchestrator {
             }
 
             if !should_continue {
-                info!("Orchestration completed successfully in {} rounds", current_round);
+                info!(
+                    "Orchestration completed successfully in {} rounds",
+                    current_round
+                );
                 break;
             }
         }
@@ -271,7 +342,6 @@ impl AgentOrchestrator {
         })
     }
 
-    /// 使用工作流执行
     pub async fn orchestrate_with_workflow(
         &self,
         workflow: &Workflow,
@@ -279,10 +349,9 @@ impl AgentOrchestrator {
     ) -> anyhow::Result<OrchestrationResult> {
         if let Some(ref engine) = self.workflow_engine {
             let start_time = std::time::Instant::now();
-            
-            // 执行工作流
+
             let workflow_result = engine.execute(workflow, input, &self.agents).await?;
-            
+
             let duration = start_time.elapsed().as_secs_f64();
 
             Ok(OrchestrationResult {
@@ -300,7 +369,6 @@ impl AgentOrchestrator {
         }
     }
 
-    /// 获取配置
     pub fn config(&self) -> &OrchestrationConfig {
         &self.config
     }
@@ -314,9 +382,8 @@ mod tests {
     async fn test_orchestrator_creation() {
         let config = OrchestrationConfig::default();
         let orchestrator = AgentOrchestrator::new(config);
-        
+
         let agents = orchestrator.list_agents().await;
         assert_eq!(agents.len(), 0);
     }
 }
-

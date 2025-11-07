@@ -1,9 +1,9 @@
-use serde::{Serialize, Deserialize};
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, debug};
-use dashmap::DashMap;
+use tracing::{debug, info};
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, ToSchema)]
@@ -37,7 +37,6 @@ impl FeatureFlag {
     }
 
     pub fn is_enabled_for(&self, user_id: Option<&str>) -> bool {
-        // 检查是否在禁用列表
         if let Some(uid) = user_id {
             if self.disabled_for.iter().any(|id| id == uid) {
                 return false;
@@ -47,7 +46,6 @@ impl FeatureFlag {
         match &self.status {
             FlagStatus::Disabled => false,
             FlagStatus::Enabled => {
-                // 检查是否在启用列表
                 if self.enabled_for.is_empty() {
                     true
                 } else if let Some(uid) = user_id {
@@ -55,9 +53,8 @@ impl FeatureFlag {
                 } else {
                     false
                 }
-            },
+            }
             FlagStatus::GradualRollout { percentage } => {
-                // 灰度发布：基于用户ID的哈希值
                 if let Some(uid) = user_id {
                     let hash = Self::hash_user(uid);
                     let user_percentage = (hash % 100) as u8;
@@ -105,23 +102,26 @@ impl FeatureFlagStore {
 
     pub async fn is_enabled(&self, name: &str, user_id: Option<&str>) -> bool {
         let cache_key = format!("{}:{}", name, user_id.unwrap_or("anonymous"));
-        
-        // 先检查缓存
+
         if let Some(cached) = self.cache.get(&cache_key) {
             return *cached.value();
         }
 
         let flags = self.flags.read().await;
-        let enabled = flags.get(name)
+        let enabled = flags
+            .get(name)
             .map(|flag| flag.is_enabled_for(user_id))
             .unwrap_or(false);
 
-        // 缓存结果（TTL 10秒）
         self.cache.insert(cache_key, enabled);
-        
-        debug!("Feature flag '{}' is {} for user {:?}", name, 
-            if enabled { "enabled" } else { "disabled" }, user_id);
-        
+
+        debug!(
+            "Feature flag '{}' is {} for user {:?}",
+            name,
+            if enabled { "enabled" } else { "disabled" },
+            user_id
+        );
+
         enabled
     }
 
@@ -130,8 +130,7 @@ impl FeatureFlagStore {
         if flags.contains_key(name) {
             info!("Updating feature flag: {}", name);
             flags.insert(name.to_string(), flag);
-            
-            // 清除缓存
+
             self.cache.clear();
         }
     }
@@ -157,4 +156,3 @@ impl Default for FeatureFlagStore {
         Self::new()
     }
 }
-

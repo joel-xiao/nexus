@@ -1,28 +1,26 @@
-use axum::Router;
-use axum::routing::get;
-use utoipa::OpenApi;
 use crate::routes::handlers::health as handlers;
+use axum::routing::get;
+use axum::Router;
+use utoipa::OpenApi;
 
-/// 健康检查端点
 #[utoipa::path(
     get,
     path = "/health",
     tag = "health",
     responses(
-        (status = 200, description = "服务健康")
+        (status = 200, description = "服务健康", content_type = "application/json")
     )
 )]
 pub async fn health_handler() -> axum::Json<serde_json::Value> {
     handlers::health_handler().await
 }
 
-/// 就绪检查端点
 #[utoipa::path(
     get,
     path = "/ready",
     tag = "health",
     responses(
-        (status = 200, description = "服务就绪状态")
+        (status = 200, description = "服务就绪状态", content_type = "application/json")
     )
 )]
 pub async fn readiness_handler(
@@ -48,8 +46,3 @@ pub fn health_routes() -> Router {
     )
 )]
 pub struct HealthApiDoc;
-
-
-
-
-

@@ -31,4 +31,3 @@ impl MockAdapter {
         Self { name }
     }
 }
-

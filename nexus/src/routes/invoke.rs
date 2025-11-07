@@ -1,17 +1,16 @@
-use axum::Router;
-use axum::routing::post;
-use utoipa::OpenApi;
 use crate::routes::handlers::invoke as handlers;
+use axum::routing::post;
+use axum::Router;
+use utoipa::OpenApi;
 
-/// 调用 LLM 模型处理请求
 #[utoipa::path(
     post,
     path = "/api/invoke",
     tag = "invoke",
     request_body = handlers::InvokeRequest,
     responses(
-        (status = 200, description = "成功处理请求"),
-        (status = 500, description = "服务器内部错误")
+        (status = 200, description = "成功处理请求", content_type = "application/json"),
+        (status = 500, description = "服务器内部错误", body = crate::routes::common::ErrorResponse)
     )
 )]
 pub async fn invoke_handler(
@@ -22,8 +21,7 @@ pub async fn invoke_handler(
 }
 
 pub fn invoke_routes() -> Router {
-    Router::new()
-        .route("/invoke", post(invoke_handler))
+    Router::new().route("/invoke", post(invoke_handler))
 }
 
 #[derive(OpenApi)]
@@ -33,6 +31,8 @@ pub fn invoke_routes() -> Router {
     ),
     components(schemas(
         handlers::InvokeRequest,
+        handlers::InvokeResponse,
+        crate::routes::common::ErrorResponse,
     )),
     tags(
         (name = "invoke", description = "模型调用接口"),
@@ -41,9 +41,3 @@ pub fn invoke_routes() -> Router {
 pub struct InvokeApiDoc;
 
 pub use handlers::{InvokeRequest, InvokeResponse};
-
-
-
-
-
-

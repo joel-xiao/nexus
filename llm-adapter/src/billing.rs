@@ -1,20 +1,15 @@
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use tracing::{info, debug};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::{debug, info};
 
-/// 计费配置
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BillingConfig {
-    /// 输入 token 价格（每 1000 tokens）
     pub input_price_per_1k: f64,
-    /// 输出 token 价格（每 1000 tokens）
     pub output_price_per_1k: f64,
-    /// 最小计费单位（tokens）
     pub min_charge_tokens: u64,
-    /// 是否启用计费
     pub enabled: bool,
 }
 
@@ -29,7 +24,6 @@ impl Default for BillingConfig {
     }
 }
 
-/// 使用记录
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UsageRecord {
     pub adapter_name: String,
@@ -42,7 +36,6 @@ pub struct UsageRecord {
     pub metadata: serde_json::Value,
 }
 
-/// 计费统计器
 pub struct BillingTracker {
     config: Arc<RwLock<BillingConfig>>,
     records: Arc<DashMap<String, Vec<UsageRecord>>>, // adapter_name -> records
@@ -80,7 +73,6 @@ impl BillingTracker {
         }
     }
 
-    /// 记录使用情况
     pub async fn record_usage(
         &self,
         adapter_name: String,
@@ -95,7 +87,6 @@ impl BillingTracker {
             return;
         }
 
-        // 计算成本
         let input_cost = (input_tokens as f64 / 1000.0) * config.input_price_per_1k;
         let output_cost = (output_tokens as f64 / 1000.0) * config.output_price_per_1k;
         let total_cost = input_cost + output_cost;
@@ -111,25 +102,24 @@ impl BillingTracker {
             metadata,
         };
 
-        // 保存记录
         self.records
             .entry(adapter_name.clone())
             .or_insert_with(Vec::new)
-            .push(record.clone());
+            .push(record);
 
-        // 更新用户统计
-        if let Some(ref uid) = user_id {
-            let mut stats = self.user_stats
-                .entry(uid.clone())
-                .or_insert_with(|| UserBillingStats {
-                    user_id: uid.clone(),
-                    total_requests: 0,
-                    total_input_tokens: 0,
-                    total_output_tokens: 0,
-                    total_cost: 0.0,
-                    last_updated: Utc::now(),
-                });
-            
+        if let Some(uid) = user_id {
+            let mut stats =
+                self.user_stats
+                    .entry(uid.clone())
+                    .or_insert_with(|| UserBillingStats {
+                        user_id: uid.clone(),
+                        total_requests: 0,
+                        total_input_tokens: 0,
+                        total_output_tokens: 0,
+                        total_cost: 0.0,
+                        last_updated: Utc::now(),
+                    });
+
             stats.total_requests += 1;
             stats.total_input_tokens += input_tokens;
             stats.total_output_tokens += output_tokens;
@@ -137,8 +127,8 @@ impl BillingTracker {
             stats.last_updated = Utc::now();
         }
 
-        // 更新适配器统计
-        let mut adapter_stats = self.adapter_stats
+        let mut adapter_stats = self
+            .adapter_stats
             .entry(adapter_name.clone())
             .or_insert_with(|| AdapterBillingStats {
                 adapter_name: adapter_name.clone(),
@@ -148,7 +138,7 @@ impl BillingTracker {
                 total_cost: 0.0,
                 last_updated: Utc::now(),
             });
-        
+
         adapter_stats.total_requests += 1;
         adapter_stats.total_input_tokens += input_tokens;
         adapter_stats.total_output_tokens += output_tokens;
@@ -164,27 +154,27 @@ impl BillingTracker {
         );
     }
 
-    /// 获取用户统计
     pub fn get_user_stats(&self, user_id: &str) -> Option<UserBillingStats> {
         self.user_stats.get(user_id).map(|s| s.value().clone())
     }
 
-    /// 获取适配器统计
     pub fn get_adapter_stats(&self, adapter_name: &str) -> Option<AdapterBillingStats> {
-        self.adapter_stats.get(adapter_name).map(|s| s.value().clone())
+        self.adapter_stats
+            .get(adapter_name)
+            .map(|s| s.value().clone())
     }
 
-    /// 获取所有用户统计
     pub fn get_all_user_stats(&self) -> Vec<UserBillingStats> {
         self.user_stats.iter().map(|e| e.value().clone()).collect()
     }
 
-    /// 获取所有适配器统计
     pub fn get_all_adapter_stats(&self) -> Vec<AdapterBillingStats> {
-        self.adapter_stats.iter().map(|e| e.value().clone()).collect()
+        self.adapter_stats
+            .iter()
+            .map(|e| e.value().clone())
+            .collect()
     }
 
-    /// 更新计费配置
     pub async fn update_config(&self, config: BillingConfig) {
         let mut cfg = self.config.write().await;
         *cfg = config;
@@ -197,5 +187,3 @@ impl Default for BillingTracker {
         Self::new(BillingConfig::default())
     }
 }
-
-

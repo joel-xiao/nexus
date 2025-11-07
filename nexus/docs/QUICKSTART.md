@@ -78,14 +78,14 @@ curl -X PUT http://localhost:3000/api/config/reload/adapter \
 
 ```bash
 # 1. 编辑配置文件（复制示例文件）
-cp config/examples/adapter_config_example.json config/adapters.json
+cp config/config.example.json config/config.json
 
-# 2. 编辑 config/adapters.json，填入你的 API keys
+# 2. 编辑 config/config.json，填入你的 API keys
 
 # 3. 通过 API 导入配置
 curl -X POST http://localhost:3000/api/config/import \
   -H "Content-Type: application/json" \
-  -d @config/adapters.json
+  -d @config/config.json
 ```
 
 ## 🎯 体验大模型

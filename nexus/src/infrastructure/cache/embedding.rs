@@ -1,7 +1,7 @@
 use crate::infrastructure::cache::RedisCache;
-use serde::{Serialize, Deserialize};
 use anyhow::Result;
 use md5;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EmbeddingEntry {
@@ -37,7 +37,13 @@ impl EmbeddingCache {
         }
     }
 
-    pub async fn set(&self, text: &str, model: &str, embedding: Vec<f32>, ttl_seconds: Option<u64>) -> Result<()> {
+    pub async fn set(
+        &self,
+        text: &str,
+        model: &str,
+        embedding: Vec<f32>,
+        ttl_seconds: Option<u64>,
+    ) -> Result<()> {
         let key = self.key(text, model);
         let entry = EmbeddingEntry {
             text: text.to_string(),
@@ -53,4 +59,3 @@ impl Default for EmbeddingCache {
         Self::new(None)
     }
 }
-

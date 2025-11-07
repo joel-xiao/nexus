@@ -1,14 +1,11 @@
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Semaphore;
 use tracing::debug;
-use std::time::Duration;
 
-/// 并发控制配置
 #[derive(Clone, Debug)]
 pub struct ConcurrencyConfig {
-    /// 最大并发数
     pub max_concurrent: usize,
-    /// 是否启用并发控制
     pub enabled: bool,
 }
 
@@ -21,7 +18,6 @@ impl Default for ConcurrencyConfig {
     }
 }
 
-/// 并发控制器（使用 Semaphore）
 pub struct ConcurrencyGuard {
     semaphore: Arc<Semaphore>,
     config: ConcurrencyConfig,
@@ -41,13 +37,11 @@ impl ConcurrencyGuard {
         }
     }
 
-    /// 获取许可（如果可用）
     pub async fn acquire(&self) -> Result<ConcurrencyPermit, ConcurrencyError> {
         if !self.config.enabled {
             return Ok(ConcurrencyPermit::unlimited());
         }
 
-        // 尝试获取许可，带超时
         let permit = tokio::time::timeout(
             Duration::from_secs(30),
             self.semaphore.clone().acquire_owned(),
@@ -59,18 +53,14 @@ impl ConcurrencyGuard {
         Ok(ConcurrencyPermit::new(permit))
     }
 
-    /// 获取当前可用许可数
     pub fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }
 
-    /// 更新配置
     pub fn update_config(&mut self, config: ConcurrencyConfig) {
         self.config = config.clone();
-        
+
         if config.enabled {
-            // 动态调整 semaphore 的许可数比较复杂
-            // 这里简单记录配置更新
             debug!(
                 max_concurrent = config.max_concurrent,
                 "Concurrency config updated"
@@ -79,7 +69,6 @@ impl ConcurrencyGuard {
     }
 }
 
-/// 并发许可（RAII 模式）
 pub struct ConcurrencyPermit {
     permit: Option<tokio::sync::OwnedSemaphorePermit>,
 }
@@ -92,15 +81,12 @@ impl ConcurrencyPermit {
     }
 
     fn unlimited() -> Self {
-        Self {
-            permit: None,
-        }
+        Self { permit: None }
     }
 }
 
 impl Drop for ConcurrencyPermit {
     fn drop(&mut self) {
-        // 自动释放许可
         drop(self.permit.take());
     }
 }
@@ -121,5 +107,3 @@ impl std::fmt::Display for ConcurrencyError {
 }
 
 impl std::error::Error for ConcurrencyError {}
-
-

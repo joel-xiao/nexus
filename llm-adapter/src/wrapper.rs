@@ -1,13 +1,12 @@
-use crate::registry::Adapter;
-use crate::rate_limit::RateLimiter;
 use crate::billing::BillingTracker;
 use crate::guard::ConcurrencyGuard;
+use crate::rate_limit::RateLimiter;
+use crate::registry::{Adapter, InvokeOptions};
 use async_trait::async_trait;
 use std::sync::Arc;
-use tracing::{warn, error};
+use tracing::{error, warn};
 use uuid::Uuid;
 
-/// 包装的 Adapter - 集成限流、计费、并发控制
 pub struct WrappedAdapter {
     inner: Arc<dyn Adapter + Send + Sync>,
     rate_limiter: Arc<RateLimiter>,
@@ -41,53 +40,61 @@ impl Adapter for WrappedAdapter {
     }
 
     async fn describe(&self) -> String {
-        format!("{} (with rate limiting, billing, concurrency control)", self.inner.describe().await)
+        format!(
+            "{} (with rate limiting, billing, concurrency control)",
+            self.inner.describe().await
+        )
     }
 
     async fn invoke(&self, prompt: &str) -> anyhow::Result<String> {
-        let request_id = Uuid::new_v4().to_string();
-        let user_id = None; // 可以从上下文获取
-        
-        // 1. 并发控制
-        let _permit = self.concurrency_guard.acquire().await
-            .map_err(|e| {
-                error!("Concurrency limit exceeded: {}", e);
-                anyhow::anyhow!("Service busy, please try again later")
-            })?;
+        self.invoke_with_options(prompt, &InvokeOptions::default()).await
+    }
 
-        // 2. 限流检查
-        let rate_limit_key = format!("{}:{}", self.adapter_name, user_id.as_deref().unwrap_or("anonymous"));
-        self.rate_limiter.check(&rate_limit_key).await
+    async fn invoke_with_options(&self, prompt: &str, options: &InvokeOptions) -> anyhow::Result<String> {
+        let request_id = Uuid::new_v4().to_string();
+        let user_id = options.user_id.clone();
+
+        let _permit = self.concurrency_guard.acquire().await.map_err(|e| {
+            error!("Concurrency limit exceeded: {}", e);
+            anyhow::anyhow!("Service busy, please try again later")
+        })?;
+
+        let rate_limit_key = format!(
+            "{}:{}",
+            self.adapter_name,
+            user_id.as_deref().unwrap_or("anonymous")
+        );
+        self.rate_limiter
+            .check(&rate_limit_key)
+            .await
             .map_err(|e| {
                 warn!("Rate limit exceeded for {}: {}", rate_limit_key, e);
                 anyhow::anyhow!("Rate limit exceeded: {}", e)
             })?;
 
-        // 3. 调用原始适配器
         let start = std::time::Instant::now();
-        let result = self.inner.invoke(prompt).await;
+        let result = self.inner.invoke_with_options(prompt, options).await;
         let duration = start.elapsed();
 
-        // 4. 计费统计（简化：根据 prompt 长度估算 tokens）
-        // 实际应该从 API 响应中获取真实的 token 数
         let input_tokens = estimate_tokens(prompt);
         let output_tokens = match &result {
             Ok(ref output) => estimate_tokens(output),
             Err(_) => 0,
         };
 
-        // 记录使用情况
-        self.billing_tracker.record_usage(
-            self.adapter_name.clone(),
-            user_id,
-            request_id,
-            input_tokens,
-            output_tokens,
-            serde_json::json!({
-                "duration_ms": duration.as_millis(),
-                "success": result.is_ok(),
-            }),
-        ).await;
+        self.billing_tracker
+            .record_usage(
+                self.adapter_name.clone(),
+                user_id,
+                request_id,
+                input_tokens,
+                output_tokens,
+                serde_json::json!({
+                    "duration_ms": duration.as_millis(),
+                    "success": result.is_ok(),
+                }),
+            )
+            .await;
 
         result
     }
@@ -97,14 +104,13 @@ impl Adapter for WrappedAdapter {
     }
 }
 
-/// 估算 token 数量（简化版：实际应该使用 tiktoken 等库）
 fn estimate_tokens(text: &str) -> u64 {
-    // 简单估算：英文约 4 字符 = 1 token，中文约 1.5 字符 = 1 token
     let chars: usize = text.chars().count();
-    let chinese_chars = text.chars().filter(|c| (*c as u32) >= 0x4E00 && (*c as u32) <= 0x9FFF).count();
+    let chinese_chars = text
+        .chars()
+        .filter(|c| (*c as u32) >= 0x4E00 && (*c as u32) <= 0x9FFF)
+        .count();
     let english_chars = chars - chinese_chars;
-    
+
     ((english_chars as f64 / 4.0) + (chinese_chars as f64 / 1.5)) as u64
 }
-
-

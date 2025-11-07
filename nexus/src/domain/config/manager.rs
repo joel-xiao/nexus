@@ -1,12 +1,11 @@
-use serde::{Serialize, Deserialize};
+use crate::domain::config::feature_flag::FeatureFlagStore;
+use crate::domain::config::routing::ModelRouter;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
-use crate::domain::config::feature_flag::FeatureFlagStore;
-use crate::domain::config::routing::ModelRouter;
 
-// 重新导出 llm_adapter 的 AdapterConfig
 pub use llm_adapter::AdapterConfig;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -60,26 +59,38 @@ impl ConfigManager {
 
     pub async fn update_config(&self, new_config: Config) {
         info!("Updating configuration (version: {})", new_config.version);
-        
+
         let mut config = self.config.write().await;
         *config = new_config.clone();
 
-        // 通知所有监听者
         let handlers = self.watch_handlers.read().await;
         for handler in handlers.iter() {
             let _ = handler.send(new_config.clone());
         }
     }
 
+    pub async fn sync_prompts_to_store(&self, prompt_store: &std::sync::Arc<tokio::sync::RwLock<crate::application::PromptStore>>) {
+        let config = self.config.read().await;
+        let mut store = prompt_store.write().await;
+        for (name, prompt_config) in &config.prompts {
+            if prompt_config.enabled {
+                if let Err(e) = store.register_template(name, &prompt_config.template) {
+                    tracing::warn!("Failed to register prompt template {}: {}", name, e);
+                }
+            }
+        }
+    }
+
     pub async fn hot_reload_adapter(&self, adapter_config: AdapterConfig) -> anyhow::Result<()> {
         info!("Hot reloading adapter: {}", adapter_config.name);
         let mut config = self.config.write().await;
-        config.adapters.insert(adapter_config.name.clone(), adapter_config.clone());
-        
-        // 返回配置以便外部可以注册适配器
+        config
+            .adapters
+            .insert(adapter_config.name.clone(), adapter_config.clone());
+
         Ok(())
     }
-    
+
     /// 获取所有适配器配置
     pub async fn get_all_adapter_configs(&self) -> Vec<AdapterConfig> {
         let config = self.config.read().await;
@@ -89,7 +100,9 @@ impl ConfigManager {
     pub async fn hot_reload_prompt(&self, prompt_config: PromptConfig) -> anyhow::Result<()> {
         info!("Hot reloading prompt: {}", prompt_config.name);
         let mut config = self.config.write().await;
-        config.prompts.insert(prompt_config.name.clone(), prompt_config);
+        config
+            .prompts
+            .insert(prompt_config.name.clone(), prompt_config);
         Ok(())
     }
 
@@ -133,4 +146,3 @@ impl Default for ConfigManager {
         Self::new()
     }
 }
-

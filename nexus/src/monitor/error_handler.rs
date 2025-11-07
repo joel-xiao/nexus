@@ -4,9 +4,9 @@ use axum::{
     response::{IntoResponse, Response},
     BoxError,
 };
+use serde_json::json;
 use std::sync::Arc;
 use tracing::{error, warn};
-use serde_json::json;
 
 /// 全局错误处理中间件
 pub struct ErrorHandler {
@@ -18,37 +18,30 @@ impl ErrorHandler {
     pub fn new() -> Self {
         Self { metrics: None }
     }
-    
+
     pub fn with_metrics(metrics: Arc<crate::monitor::prometheus::PrometheusMetrics>) -> Self {
         Self {
             metrics: Some(metrics),
         }
     }
-    
+
     /// 处理请求中的错误
     pub async fn handle_error(
         err: BoxError,
         req: Request,
         metrics: Option<Arc<crate::monitor::prometheus::PrometheusMetrics>>,
     ) -> Response {
-        // 记录错误但不会阻塞
         let error_msg = err.to_string();
         let path = req.uri().path().to_string();
-        
+
         error!(
             error = %error_msg,
             path = %path,
             "Request error occurred"
         );
-        
-        // 记录指标（如果可用）
-        if metrics.is_some() {
-            // 记录错误计数
-            // 注意：prometheus crate 没有提供直接的方法来增加带标签的计数器
-            // 这里我们记录一个通用错误
-        }
-        
-        // 根据错误类型返回适当的响应
+
+        if metrics.is_some() {}
+
         if error_msg.contains("timeout") || error_msg.contains("deadline") {
             (
                 StatusCode::REQUEST_TIMEOUT,
@@ -57,7 +50,8 @@ impl ErrorHandler {
                     "message": "The request took too long to process",
                     "status": 408
                 })),
-            ).into_response()
+            )
+                .into_response()
         } else if error_msg.contains("not found") || error_msg.contains("404") {
             (
                 StatusCode::NOT_FOUND,
@@ -66,24 +60,21 @@ impl ErrorHandler {
                     "message": "The requested resource was not found",
                     "status": 404
                 })),
-            ).into_response()
+            )
+                .into_response()
         } else {
             let mut error_json = json!({
                 "error": "Internal server error",
                 "message": "An unexpected error occurred",
                 "status": 500,
             });
-            
-            // 在生产环境中，不应该暴露详细错误信息
+
             #[cfg(debug_assertions)]
             {
                 error_json["details"] = json!(error_msg);
             }
-            
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(error_json),
-            ).into_response()
+
+            (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(error_json)).into_response()
         }
     }
 }
@@ -108,19 +99,19 @@ impl AppError {
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::Internal(msg.into())
     }
-    
+
     pub fn not_found(msg: impl Into<String>) -> Self {
         Self::NotFound(msg.into())
     }
-    
+
     pub fn bad_request(msg: impl Into<String>) -> Self {
         Self::BadRequest(msg.into())
     }
-    
+
     pub fn timeout(msg: impl Into<String>) -> Self {
         Self::Timeout(msg.into())
     }
-    
+
     pub fn unauthorized(msg: impl Into<String>) -> Self {
         Self::Unauthorized(msg.into())
     }
@@ -132,25 +123,25 @@ impl IntoResponse for AppError {
             AppError::Internal(msg) => {
                 error!("Internal error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, msg)
-            },
+            }
             AppError::NotFound(msg) => {
                 warn!("Not found: {}", msg);
                 (StatusCode::NOT_FOUND, msg)
-            },
+            }
             AppError::BadRequest(msg) => {
                 warn!("Bad request: {}", msg);
                 (StatusCode::BAD_REQUEST, msg)
-            },
+            }
             AppError::Timeout(msg) => {
                 warn!("Timeout: {}", msg);
                 (StatusCode::REQUEST_TIMEOUT, msg)
-            },
+            }
             AppError::Unauthorized(msg) => {
                 warn!("Unauthorized: {}", msg);
                 (StatusCode::UNAUTHORIZED, msg)
-            },
+            }
         };
-        
+
         (
             status,
             axum::Json(json!({
@@ -158,7 +149,8 @@ impl IntoResponse for AppError {
                 "message": error_msg,
                 "status": status.as_u16()
             })),
-        ).into_response()
+        )
+            .into_response()
     }
 }
 
@@ -180,4 +172,3 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for AppError {
         Self::Internal(err.to_string())
     }
 }
-

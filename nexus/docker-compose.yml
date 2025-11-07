@@ -1,12 +1,11 @@
 version: '3.8'
 
 services:
-  # Redis 缓存服务
   redis:
     image: redis:7-alpine
     container_name: nexus-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
@@ -17,109 +16,37 @@ services:
       retries: 3
     networks:
       - nexus-network
+    restart: unless-stopped
 
-  # Prometheus 监控
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: nexus-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    networks:
-      - nexus-network
-
-  # Grafana 可视化
-  grafana:
-    image: grafana/grafana:latest
-    container_name: nexus-grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources
-    depends_on:
-      - prometheus
-    networks:
-      - nexus-network
-
-  # Jaeger 链路追踪
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: nexus-jaeger
-    ports:
-      - "16686:16686"  # UI
-      - "14268:14268"  # HTTP
-      - "4317:4317"    # OTLP gRPC
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-    networks:
-      - nexus-network
-
-  # Nexus 主服务
   nexus:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: nexus/Dockerfile
     container_name: nexus
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     environment:
-      - REDIS_URL=redis://redis:6379
-      - JAEGER_ENDPOINT=http://jaeger:4317
-      - LOG_FORMAT=json
-      - RUST_LOG=info
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - JAEGER_ENDPOINT=${JAEGER_ENDPOINT:-}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - RUST_LOG=${RUST_LOG:-info}
+      - PORT=3000
     depends_on:
       redis:
         condition: service_healthy
-      prometheus:
-        condition: service_started
-      jaeger:
-        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
     networks:
       - nexus-network
     restart: unless-stopped
 
-  # Adapter Sidecar 服务（可选，用于独立部署适配器）
-  adapter-sidecar:
-    build:
-      context: .
-      dockerfile: Dockerfile.adapter
-    container_name: adapter-sidecar
-    ports:
-      - "3002:3000"
-    environment:
-      - SERVICE_TYPE=adapter
-      - REDIS_URL=redis://redis:6379
-      - LOG_FORMAT=json
-      - RUST_LOG=info
-    depends_on:
-      - redis
-    networks:
-      - nexus-network
-    profiles:
-      - adapter  # 使用 profile 可选启用
-
 volumes:
   redis-data:
-  prometheus-data:
-  grafana-data:
 
 networks:
   nexus-network:
     driver: bridge
-

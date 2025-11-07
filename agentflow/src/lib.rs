@@ -1,43 +1,20 @@
-/// AgentFlow - 轻量级多代理协作和工作流编排框架
-/// 
-/// 这是一个独立的多代理协作框架，不涉及任何具体的 LLM 调用实现
-/// Agent trait 是纯抽象，需要用户实现具体的 Agent
-
 pub mod agent;
+pub mod config;
+pub mod llm_provider;
 pub mod orchestrator;
 pub mod workflow;
-pub mod config;
 
-// 重新导出核心类型
 pub use agent::{
-    AgentFlowAgent as Agent,
-    AgentConfig,
-    AgentRole,
-    AgentCapability,
-    AgentMessage,
-    AgentResponse,
-    AgentContext,
-    MessageType,
+    AgentCapability, AgentConfig, AgentContext, AgentFlowAgent as Agent, AgentMessage,
+    AgentResponse, AgentRole, MessageType,
 };
 
-pub use orchestrator::{
-    AgentOrchestrator,
-    OrchestrationConfig,
-    OrchestrationResult,
-};
+pub use orchestrator::{AgentOrchestrator, OrchestrationConfig, OrchestrationResult, SpeakerSelection};
 
 pub use workflow::{
-    Workflow,
-    WorkflowConfig,
-    WorkflowStep,
-    WorkflowEngine,
-    WorkflowResult,
-    StepType,
+    StepType, Workflow, WorkflowConfig, WorkflowEngine, WorkflowResult, WorkflowStep,
 };
 
-pub use config::{
-    AgentFlowConfig,
-    GlobalConfig,
-    load_config,
-    save_config,
-};
+pub use config::{load_config, save_config, AgentFlowConfig, GlobalConfig};
+
+pub use llm_provider::{LLMInvokeOptions, LLMProvider};

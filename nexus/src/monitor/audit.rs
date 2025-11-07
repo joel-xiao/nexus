@@ -1,5 +1,5 @@
 use crate::monitor::event::{Event, EventBus, EventLevel};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -31,7 +31,7 @@ impl AuditLog {
             serde_json::to_value(&record).unwrap_or_default(),
             EventLevel::Info,
         );
-        
+
         self.event_bus.publish(event);
     }
 
@@ -54,8 +54,7 @@ impl AuditLog {
             result: result.to_string(),
             metadata,
         };
-        
+
         self.log(record);
     }
 }
-

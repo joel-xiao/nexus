@@ -1,11 +1,10 @@
-use axum::{Router, Extension, Json};
-use axum::routing::{get, post, put, delete};
-use utoipa::OpenApi;
 use crate::routes::handlers::config::flags as handlers;
-use std::sync::Arc;
 use crate::state::AppState;
+use axum::routing::{delete, get, post, put};
+use axum::{Extension, Json, Router};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
-/// 创建 Feature Flag
 #[utoipa::path(
     post,
     path = "/api/config/flags",
@@ -19,13 +18,9 @@ pub async fn create_flag(
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<CreateFlagRequest>,
 ) -> Json<FlagResponse> {
-    handlers::create_flag(
-        Extension(state),
-        Json(payload)
-    ).await
+    handlers::create_flag(Extension(state), Json(payload)).await
 }
 
-/// 列出所有 Feature Flags
 #[utoipa::path(
     get,
     path = "/api/config/flags",
@@ -40,7 +35,6 @@ pub async fn list_flags(
     handlers::list_flags(Extension(state)).await
 }
 
-/// 获取单个 Feature Flag
 #[utoipa::path(
     get,
     path = "/api/config/flags/{name}",
@@ -49,8 +43,8 @@ pub async fn list_flags(
         ("name" = String, Path, description = "标志名称")
     ),
     responses(
-        (status = 200, description = "标志详情"),
-        (status = 404, description = "标志不存在")
+        (status = 200, description = "标志详情", content_type = "application/json"),
+        (status = 404, description = "标志不存在", body = crate::routes::common::ErrorResponse)
     )
 )]
 pub async fn get_flag(
@@ -60,7 +54,6 @@ pub async fn get_flag(
     handlers::get_flag(Extension(state), axum::extract::Path(name)).await
 }
 
-/// 更新 Feature Flag
 #[utoipa::path(
     put,
     path = "/api/config/flags/{name}",
@@ -81,7 +74,6 @@ pub async fn update_flag(
     handlers::update_flag(Extension(state), axum::extract::Path(name), Json(payload)).await
 }
 
-/// 删除 Feature Flag
 #[utoipa::path(
     delete,
     path = "/api/config/flags/{name}",
@@ -90,7 +82,7 @@ pub async fn update_flag(
         ("name" = String, Path, description = "标志名称")
     ),
     responses(
-        (status = 200, description = "成功删除标志")
+        (status = 200, description = "成功删除标志", content_type = "application/json")
     )
 )]
 pub async fn delete_flag(
@@ -100,7 +92,6 @@ pub async fn delete_flag(
     handlers::delete_flag(Extension(state), axum::extract::Path(name)).await
 }
 
-/// 检查 Feature Flag 状态
 #[utoipa::path(
     get,
     path = "/api/config/flags/{name}/check",
@@ -121,39 +112,30 @@ pub async fn check_flag(
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CreateFlagRequest {
-    /// 标志名称
     #[schema(example = "new_feature")]
     pub name: String,
-    /// 标志状态: "enabled", "disabled", "gradual"
     #[schema(example = "enabled")]
     pub status: String,
-    /// 标志描述
     #[schema(example = "新功能标志")]
     pub description: Option<String>,
-    /// 渐进式发布的百分比 (0-100)
     #[schema(example = 50)]
     pub percentage: Option<u8>,
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct UpdateFlagRequest {
-    /// 标志状态: "enabled", "disabled", "gradual"
     #[schema(example = "enabled")]
     pub status: String,
-    /// 标志描述
     #[schema(example = "新功能标志")]
     pub description: Option<String>,
-    /// 渐进式发布的百分比 (0-100)
     #[schema(example = 50)]
     pub percentage: Option<u8>,
 }
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct FlagResponse {
-    /// 标志名称
     #[schema(example = "new_feature")]
     pub name: String,
-    /// 是否启用
     #[schema(example = true)]
     pub enabled: bool,
 }
@@ -172,6 +154,7 @@ pub struct FlagResponse {
         CreateFlagRequest,
         UpdateFlagRequest,
         FlagResponse,
+        crate::routes::common::ErrorResponse,
     )),
     tags(
         (name = "config-flags", description = "功能标志管理"),

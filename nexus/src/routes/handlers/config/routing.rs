@@ -1,9 +1,9 @@
-use axum::{Json, Extension};
-use crate::state::AppState;
 use crate::domain::config::routing::{RoutingRule, RoutingStrategy};
-use std::sync::Arc;
-use super::common::{ok_response, ok_response_with_message, error_response};
+use crate::routes::common::{error_response, ok_response, ok_response_with_message};
 use crate::routes::config::routing::{CreateRuleRequest, UpdateRuleRequest};
+use crate::state::AppState;
+use axum::{Extension, Json};
+use std::sync::Arc;
 
 fn parse_routing_strategy(strategy: &str) -> RoutingStrategy {
     match strategy {
@@ -46,10 +46,11 @@ pub async fn get_routing_rule(
     axum::extract::Path(name): axum::extract::Path<String>,
 ) -> Json<serde_json::Value> {
     let rules = state.config_manager.router().list_rules().await;
-    match rules.iter().find(|r| r.name == name) {
-        Some(rule) => ok_response(serde_json::json!({ "rule": rule })),
-        None => error_response(&format!("Routing rule {} not found", name))
-    }
+    rules
+        .iter()
+        .find(|r| r.name == name)
+        .map(|rule| ok_response(serde_json::json!({ "rule": rule })))
+        .unwrap_or_else(|| error_response(&format!("Routing rule {} not found", name)))
 }
 
 pub async fn update_routing_rule(
@@ -75,5 +76,8 @@ pub async fn delete_routing_rule(
     axum::extract::Path(name): axum::extract::Path<String>,
 ) -> Json<serde_json::Value> {
     state.config_manager.router().remove_rule(&name).await;
-    ok_response_with_message(&format!("Routing rule {} deleted", name), serde_json::json!({}))
+    ok_response_with_message(
+        &format!("Routing rule {} deleted", name),
+        serde_json::json!({}),
+    )
 }

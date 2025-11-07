@@ -1,4 +1,4 @@
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 pub struct KnowledgeBase {
     documents: Vec<String>,
@@ -17,33 +17,42 @@ impl KnowledgeBase {
     pub async fn add_document(&mut self, content: String) {
         info!("Adding document to knowledge base");
         self.documents.push(content);
-        // TODO: 实现向量嵌入
     }
 
     pub async fn query(&self, query: &str) -> Vec<String> {
         info!("Querying knowledge base: {}", query);
-        
-        // 简单的关键词匹配
+
+        if self.documents.is_empty() {
+            return Vec::new();
+        }
+
         let query_lower = query.to_lowercase();
-        let mut results = Vec::new();
-        
+        let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+        let mut scored_results: Vec<(String, usize)> = Vec::new();
+
         for doc in &self.documents {
-            if doc.to_lowercase().contains(&query_lower) {
-                results.push(doc.clone());
+            let doc_lower = doc.to_lowercase();
+            let mut score = 0;
+
+            for word in &query_words {
+                let count = doc_lower.matches(word).count();
+                score += count;
+            }
+
+            if score > 0 {
+                scored_results.push((doc.clone(), score));
             }
         }
-        
-        debug!("Found {} relevant documents", results.len());
-        
-        // 如果没有找到，返回示例
-        if results.is_empty() {
-            vec![
-                "这是一个示例文档，展示了知识库的基本功能".to_string(),
-                "您可以通过 add_document 方法添加更多文档".to_string(),
-            ]
-        } else {
-            results.into_iter().take(3).collect()
-        }
+
+        scored_results.sort_by(|a, b| b.1.cmp(&a.1));
+
+        debug!("Found {} relevant documents", scored_results.len());
+
+        scored_results
+            .into_iter()
+            .take(3)
+            .map(|(doc, _)| doc)
+            .collect()
     }
 
     pub fn size(&self) -> usize {
@@ -56,4 +65,3 @@ impl Default for KnowledgeBase {
         Self::new()
     }
 }
-

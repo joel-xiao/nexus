@@ -1,4 +1,6 @@
-//! Mock 对象定义
+use llm_adapter::providers::MockAdapter;
+use std::sync::Arc;
 
-// 这里可以定义测试中使用的 Mock 对象
-// 例如：MockAdapter, MockConfigManager 等
+pub fn create_mock_adapter(name: impl Into<String>) -> Arc<MockAdapter> {
+    Arc::new(MockAdapter::new(name.into()))
+}

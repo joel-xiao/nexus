@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct McpMessage {
@@ -42,8 +42,8 @@ impl McpMessage {
     }
 
     pub fn add_result(&mut self, result: &str) {
-        self.memory.push(serde_json::json!({"role":"assistant","content":result}));
+        self.memory
+            .push(serde_json::json!({"role":"assistant","content":result}));
         self.state = serde_json::json!({"step":"completed"});
     }
 }
-

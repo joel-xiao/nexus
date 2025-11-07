@@ -1,0 +1,16 @@
+target/
+.git/
+.gitignore
+*.log
+*.md
+docs/
+tests/
+scripts/
+deploy/
+config/
+.env
+.env.local
+*.swp
+*.swo
+*~
+

@@ -1,8 +1,8 @@
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
-use tokio::sync::mpsc;
-use std::sync::Arc;
 use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -46,8 +46,7 @@ impl EventBus {
 
     pub fn publish(&self, event: Event) {
         info!("Publishing event: {} ({})", event.id, event.event_type);
-        
-        // 广播给所有订阅者
+
         let mut failed = Vec::new();
         for entry in self.subscribers.iter() {
             if let Err(e) = entry.value().send(event.clone()) {
@@ -55,18 +54,15 @@ impl EventBus {
                 failed.push(entry.key().clone());
             }
         }
-        
-        // 移除失败的订阅者
+
         for name in failed {
             self.subscribers.remove(&name);
         }
-        
-        // 保存到缓冲区（用于审计）
+
         let buffer_key = format!("{}:{}", event.source, event.timestamp.format("%Y-%m-%d"));
         let mut buffer = self.buffer.entry(buffer_key).or_insert_with(Vec::new);
         buffer.push(event);
-        
-        // 限制缓冲区大小
+
         if buffer.len() > 1000 {
             buffer.remove(0);
         }
@@ -74,7 +70,8 @@ impl EventBus {
 
     pub fn get_events(&self, source: &str, date: &str) -> Vec<Event> {
         let key = format!("{}:{}", source, date);
-        self.buffer.get(&key)
+        self.buffer
+            .get(&key)
             .map(|v| v.value().clone())
             .unwrap_or_default()
     }
@@ -87,7 +84,12 @@ impl Default for EventBus {
 }
 
 impl Event {
-    pub fn new(event_type: String, source: String, data: serde_json::Value, level: EventLevel) -> Self {
+    pub fn new(
+        event_type: String,
+        source: String,
+        data: serde_json::Value,
+        level: EventLevel,
+    ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             event_type,
@@ -98,4 +100,3 @@ impl Event {
         }
     }
 }
-

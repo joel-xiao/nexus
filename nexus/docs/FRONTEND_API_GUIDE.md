@@ -296,6 +296,124 @@ interface ReadinessResponse {
 - **请求体**: `{ adapters: [], routing_rules: [], flags: [], prompts: [] }`
 - **响应**: `{ status: "ok", message: "Configuration imported and adapters registered successfully" }`
 
+### 8. 多智能体对话
+
+#### 8.1 启动多角色对话
+- **POST** `/api/agents/conversation`
+- **请求体**:
+  ```json
+  {
+    "message": "请帮我规划一个项目",
+    "agent_configs": [
+      {
+        "agent_id": "adapter1",
+        "role": "planner",
+        "name": "规划师",
+        "system_prompt": "你是一个专业的项目规划师..."
+      },
+      {
+        "agent_id": "adapter2",
+        "role": "executor",
+        "name": "执行者"
+      }
+    ],
+    "speaker_selection": "auto",
+    "max_rounds": 10,
+    "agent_order": ["adapter1", "adapter2"],
+    "termination_condition": "TERMINATE"
+  }
+  ```
+- **响应**: 
+  ```json
+  {
+    "status": "ok",
+    "data": {
+      "result": "对话结果",
+      "rounds": 3,
+      "agents_used": ["adapter1", "adapter2"],
+      "success": true,
+      "duration_seconds": 2.5
+    }
+  }
+  ```
+
+#### 8.2 编排多个 Agent
+- **POST** `/api/agents/orchestrate`
+- **请求体**:
+  ```json
+  {
+    "initial_message": "请完成这个任务",
+    "initial_agent_id": "planner",
+    "agent_configs": [
+      {
+        "id": "planner",
+        "name": "规划者",
+        "role": "planner",
+        "system_prompt": "你负责规划任务...",
+        "adapter_name": "openai"
+      },
+      {
+        "id": "executor",
+        "name": "执行者",
+        "role": "executor",
+        "system_prompt": "你负责执行任务...",
+        "adapter_name": "openai"
+      }
+    ],
+    "max_rounds": 20,
+    "speaker_selection": "round_robin"
+  }
+  ```
+- **响应**:
+  ```json
+  {
+    "status": "ok",
+    "data": {
+      "result": "任务完成结果",
+      "rounds": 5,
+      "agents_used": ["planner", "executor"],
+      "success": true,
+      "duration_seconds": 5.2,
+      "message_history": [...]
+    }
+  }
+  ```
+
+#### 8.3 列出可用 Agent
+- **GET** `/api/agents`
+- **响应**: 
+  ```json
+  {
+    "status": "ok",
+    "data": {
+      "agents": [
+        {
+          "id": "openai",
+          "name": "Agent-openai",
+          "adapter": "openai",
+          "enabled": true
+        }
+      ]
+    }
+  }
+  ```
+
+**角色类型**:
+- `user` - 用户角色
+- `assistant` - 助手角色
+- `planner` - 规划者角色
+- `executor` - 执行者角色
+- `reviewer` - 审查者角色
+- `coordinator` - 协调者角色
+- `expert:domain` - 领域专家（如 `expert:python`）
+- `custom:name` - 自定义角色
+
+**发言者选择策略**:
+- `round_robin` - 轮询
+- `random` - 随机
+- `manual` - 手动
+- `auto` - 自动（根据消息内容选择）
+
 
 ## 代码示例
 

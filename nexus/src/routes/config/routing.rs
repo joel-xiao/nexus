@@ -1,18 +1,18 @@
-use axum::{Router, Extension, Json};
-use axum::routing::{get, post, put, delete};
-use utoipa::OpenApi;
 use crate::routes::handlers::config::routing as handlers;
-use std::sync::Arc;
 use crate::state::AppState;
+use axum::routing::{delete, get, post, put};
+use axum::{Extension, Json, Router};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
-/// 创建路由规则
 #[utoipa::path(
     post,
     path = "/api/config/routing/rules",
     tag = "config-routing",
     request_body = CreateRuleRequest,
     responses(
-        (status = 200, description = "成功创建路由规则")
+        (status = 200, description = "成功创建路由规则", content_type = "application/json"),
+        (status = 500, description = "服务器错误", body = crate::routes::common::ErrorResponse)
     )
 )]
 pub async fn create_routing_rule(
@@ -22,7 +22,6 @@ pub async fn create_routing_rule(
     handlers::create_routing_rule(Extension(state), Json(payload)).await
 }
 
-/// 列出所有路由规则
 #[utoipa::path(
     get,
     path = "/api/config/routing/rules",
@@ -37,7 +36,6 @@ pub async fn list_routing_rules(
     handlers::list_routing_rules(Extension(state)).await
 }
 
-/// 获取单个路由规则
 #[utoipa::path(
     get,
     path = "/api/config/routing/rules/{name}",
@@ -46,8 +44,8 @@ pub async fn list_routing_rules(
         ("name" = String, Path, description = "规则名称")
     ),
     responses(
-        (status = 200, description = "路由规则详情"),
-        (status = 404, description = "路由规则不存在")
+        (status = 200, description = "路由规则详情", content_type = "application/json"),
+        (status = 404, description = "路由规则不存在", body = crate::routes::common::ErrorResponse)
     )
 )]
 pub async fn get_routing_rule(
@@ -57,7 +55,6 @@ pub async fn get_routing_rule(
     handlers::get_routing_rule(Extension(state), axum::extract::Path(name)).await
 }
 
-/// 更新路由规则
 #[utoipa::path(
     put,
     path = "/api/config/routing/rules/{name}",
@@ -67,7 +64,8 @@ pub async fn get_routing_rule(
     ),
     request_body = UpdateRuleRequest,
     responses(
-        (status = 200, description = "成功更新路由规则")
+        (status = 200, description = "成功更新路由规则", content_type = "application/json"),
+        (status = 500, description = "服务器错误", body = crate::routes::common::ErrorResponse)
     )
 )]
 pub async fn update_routing_rule(
@@ -78,7 +76,6 @@ pub async fn update_routing_rule(
     handlers::update_routing_rule(Extension(state), axum::extract::Path(name), Json(payload)).await
 }
 
-/// 删除路由规则
 #[utoipa::path(
     delete,
     path = "/api/config/routing/rules/{name}",
@@ -87,7 +84,7 @@ pub async fn update_routing_rule(
         ("name" = String, Path, description = "规则名称")
     ),
     responses(
-        (status = 200, description = "成功删除路由规则")
+        (status = 200, description = "成功删除路由规则", content_type = "application/json")
     )
 )]
 pub async fn delete_routing_rule(
@@ -101,27 +98,20 @@ use crate::domain::config::routing::ModelWeight;
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CreateRuleRequest {
-    /// 规则名称
     #[schema(example = "default_rule")]
     pub name: String,
-    /// 路由策略: "round_robin", "random", "weighted", "least_connections", "user_based", "hash_based"
     #[schema(example = "round_robin")]
     pub strategy: String,
-    /// 模型权重列表
     pub models: Vec<ModelWeight>,
-    /// 优先级，数字越大优先级越高
     #[schema(example = 100)]
     pub priority: Option<u32>,
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct UpdateRuleRequest {
-    /// 路由策略: "round_robin", "random", "weighted", "least_connections", "user_based", "hash_based"
     #[schema(example = "round_robin")]
     pub strategy: String,
-    /// 模型权重列表
     pub models: Vec<ModelWeight>,
-    /// 优先级，数字越大优先级越高
     #[schema(example = 100)]
     pub priority: Option<u32>,
 }
@@ -138,6 +128,7 @@ pub struct UpdateRuleRequest {
     components(schemas(
         CreateRuleRequest,
         UpdateRuleRequest,
+        crate::routes::common::ErrorResponse,
     )),
     tags(
         (name = "config-routing", description = "路由规则管理"),

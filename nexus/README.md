@@ -1,89 +1,108 @@
-# Nexus
+# Nexus - LLM API Gateway
 
-一个高性能的 LLM（大语言模型）网关系统，集成了 llm-adapter 和 AgentFlow 两个独立工具。
-
-## 核心特性
-
-- 🎯 **统一接口** - 为多种 LLM 提供商提供统一的调用接口（基于 llm-adapter）
-- 🤖 **多代理协作** - 支持多代理编排和工作流（基于 AgentFlow）
-- 🚀 **智能路由** - 多种路由策略（轮询、随机、加权等）
-- ⚙️ **配置管理** - 运行时配置管理
-- 📊 **监控可观测** - 日志、指标、审计、追踪
-- 💾 **缓存支持** - Redis + 内存缓存
+生产就绪的多模型 LLM 统一网关，集成 llm-adapter 和 agentflow。
 
 ## 🚀 快速开始
 
-### 启动服务
-
 ```bash
-# 方法 1: 直接运行
-cargo run
+# 编译
+cargo build --release
 
-# 方法 2: 使用 Docker Compose
-docker-compose up -d
+# 运行
+./target/release/nexus
+
+# 或开发模式
+cargo run
 ```
 
 服务将在 `http://localhost:3000` 启动。
 
-### 配置 API Key
+## 📚 文档
+
+- [快速启动](./docs/QUICKSTART.md) - 快速上手指南
+- [部署指南](./docs/DEPLOYMENT.md) - 生产环境部署
+- [环境变量](./docs/ENV.md) - 环境变量配置
+- [架构说明](./docs/ARCHITECTURE.md) - 项目架构
+- [前端 API 指南](./docs/FRONTEND_API_GUIDE.md) - 前端开发指南
+- [API 文档](http://localhost:3000/docs) - Swagger UI（运行后访问）
+
+## 🎯 核心功能
+
+### 1. LLM 调用
+- 统一调用接口 `/api/invoke`
+- 支持路由规则自动选择模型
+- 支持提示模板
+- 支持知识库检索
+- 支持后处理链
+
+### 2. 多智能体对话
+- `/api/agents/conversation` - 启动多角色对话
+- `/api/agents/orchestrate` - 编排多个 Agent
+- 支持 8 种角色类型
+- 支持发言者选择策略
+- 支持终止条件
+
+### 3. 配置管理
+- 适配器管理（CRUD、统计、按模型查询）
+- 提示模板管理
+- 路由规则管理
+- 功能开关管理
+- 配置热重载
+- 配置导入导出
+
+## 🔌 API 端点
+
+### 核心 API
+- `POST /api/invoke` - 调用 LLM
+- `POST /api/agents/conversation` - 多角色对话
+- `POST /api/agents/orchestrate` - 编排 Agent
+- `GET /api/agents` - 列出 Agent
+
+### 配置 API
+- `GET /api/config/adapters` - 适配器管理
+- `GET /api/config/prompts` - 提示模板管理
+- `GET /api/config/flags` - 功能开关管理
+- `GET /api/config/routing` - 路由规则管理
+- `POST /api/config/reload/*` - 热重载
+- `POST /api/config/import-export` - 导入导出
+
+完整 API 文档：运行服务后访问 `http://localhost:3000/docs`
+
+## ⚙️ 配置
+
+### 环境变量
+- `PORT` - 服务端口（默认: 3000）
+- `RUST_LOG` - 日志级别（默认: info）
+- `REDIS_URL` - Redis 连接（可选）
+- `JAEGER_ENDPOINT` - 追踪端点（可选）
+
+详见 [环境变量文档](./docs/ENV.md)
+
+### 配置文件
+配置文件示例：`config/config.example.json`
+
+可以通过 API 热加载配置，无需重启服务。
+
+## 🧪 测试
 
 ```bash
-curl -X PUT http://localhost:3000/api/config/reload/adapter \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "openai",
-    "api_key": "sk-your-key",
-    "model": "gpt-3.5-turbo",
-    "base_url": "https://api.openai.com/v1",
-    "enabled": true
-  }'
+# 运行所有测试（Mock 模式）
+cargo test
+
+# 使用测试脚本（支持真实模式）
+./scripts/test/run_tests.sh --real
 ```
 
-### 调用模型
+## 📦 部署
 
+### Docker Compose
 ```bash
-curl -X POST http://localhost:3000/api/invoke \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": "你好，介绍一下你自己",
-    "adapter": "openai"
-  }'
+docker-compose up -d
 ```
 
-## 📖 文档
+### Kubernetes
+详见 [部署指南](./docs/DEPLOYMENT.md)
 
-- [快速开始](./docs/QUICKSTART.md)
-- [架构设计](./docs/ARCHITECTURE.md)
-- [API 文档](./docs/FRONTEND_API_GUIDE.md)
-- [部署指南](./docs/DEPLOYMENT.md)
-- [测试文档](./tests/README.md)
-
-## 🏗️ 架构
-
-Nexus 通过集成层使用两个独立工具：
-
-```
-Nexus
- ├─→ llm-adapter（LLM 调用）
- └─→ AgentFlow（多代理协作）
-
-集成层: src/integration/llm_agent.rs
-```
-
-## 🔧 技术栈
-
-- **Web 框架**: Axum
-- **LLM 适配器**: llm-adapter
-- **多代理框架**: AgentFlow
-- **异步运行时**: Tokio
-- **缓存**: Redis
-- **监控**: Prometheus, Tracing
-
-## 📝 API 文档
-
-访问 Swagger UI：`http://localhost:3000/docs`
-
-## License
+## 📝 许可证
 
 MIT
-

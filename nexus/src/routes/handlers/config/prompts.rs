@@ -1,19 +1,21 @@
-use axum::{Json, Extension};
+use crate::routes::common::{error_response, ok_response, ok_response_with_message};
 use crate::state::AppState;
+use axum::{Extension, Json};
 use std::sync::Arc;
-use super::common::{ok_response, ok_response_with_message, error_response};
 
-pub async fn list_prompts(
-    Extension(state): Extension<Arc<AppState>>,
-) -> Json<serde_json::Value> {
+pub async fn list_prompts(Extension(state): Extension<Arc<AppState>>) -> Json<serde_json::Value> {
     let config = state.config_manager.get_config().await;
-    let prompts: Vec<serde_json::Value> = config.prompts.values().map(|prompt| {
-        serde_json::json!({
-            "name": prompt.name,
-            "template": prompt.template,
-            "enabled": prompt.enabled
+    let prompts: Vec<serde_json::Value> = config
+        .prompts
+        .values()
+        .map(|prompt| {
+            serde_json::json!({
+                "name": prompt.name,
+                "template": prompt.template,
+                "enabled": prompt.enabled
+            })
         })
-    }).collect();
+        .collect();
     ok_response(serde_json::json!({ "prompts": prompts }))
 }
 
@@ -29,8 +31,8 @@ pub async fn get_prompt(
                 "enabled": config.enabled
             });
             ok_response(serde_json::json!({ "prompt": prompt }))
-        },
-        None => error_response(&format!("Prompt {} not found", name))
+        }
+        None => error_response(&format!("Prompt {} not found", name)),
     }
 }
 
@@ -41,6 +43,9 @@ pub async fn delete_prompt(
     let mut config = state.config_manager.get_config().await;
     config.prompts.remove(&name);
     state.config_manager.update_config(config).await;
-    
+
+    let mut store = state.prompt_store.write().await;
+    store.unregister_template(&name);
+
     ok_response_with_message(&format!("Prompt {} deleted", name), serde_json::json!({}))
 }

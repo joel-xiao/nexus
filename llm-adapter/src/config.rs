@@ -1,33 +1,22 @@
-/// LLM Adapter 配置模块
-/// 
-/// 定义适配器的配置结构，完全独立，不依赖任何外部业务代码
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// 适配器配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdapterConfig {
-    /// 适配器名称
     pub name: String,
-    
-    /// API 密钥（可选，某些适配器可能不需要）
+
     #[serde(default)]
     pub api_key: Option<String>,
-    
-    /// 模型名称
+
     #[serde(default)]
     pub model: Option<String>,
-    
-    /// API 基础 URL
+
     #[serde(default)]
     pub base_url: Option<String>,
-    
-    /// 是否启用
+
     #[serde(default = "default_true")]
     pub enabled: bool,
-    
-    /// 额外元数据（用于限流、计费等配置）
+
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -79,4 +68,3 @@ impl Default for AdapterConfig {
         Self::new("default".to_string())
     }
 }
-

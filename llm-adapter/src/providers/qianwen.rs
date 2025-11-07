@@ -1,7 +1,7 @@
 use crate::registry::Adapter;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[derive(Clone)]
 pub struct QianwenAdapter {
@@ -67,16 +67,14 @@ impl Adapter for QianwenAdapter {
 
     async fn invoke(&self, prompt: &str) -> anyhow::Result<String> {
         info!("Calling Qianwen with model: {}", self.model);
-        
+
         let req = QianwenRequest {
             model: self.model.clone(),
             input: QianwenInput {
-                messages: vec![
-                    Message {
-                        role: "user".to_string(),
-                        content: prompt.to_string(),
-                    }
-                ],
+                messages: vec![Message {
+                    role: "user".to_string(),
+                    content: prompt.to_string(),
+                }],
             },
             parameters: QianwenParameters {
                 temperature: 0.7,
@@ -84,8 +82,12 @@ impl Adapter for QianwenAdapter {
             },
         };
 
-        let response = self.client
-            .post(format!("{}/v1/services/aigc/text-generation/generation", self.base_url))
+        let response = self
+            .client
+            .post(format!(
+                "{}/v1/services/aigc/text-generation/generation",
+                self.base_url
+            ))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&req)
             .send()
@@ -117,4 +119,3 @@ impl QianwenAdapter {
         }
     }
 }
-

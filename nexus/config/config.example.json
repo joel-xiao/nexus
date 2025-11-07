@@ -1,0 +1,31 @@
+{
+  "version": "1.0.0",
+  "adapters": {
+    "openai": {
+      "name": "openai",
+      "api_key": "sk-your-api-key-here",
+      "model": "gpt-4",
+      "base_url": "https://api.openai.com/v1",
+      "enabled": true,
+      "metadata": {
+        "rate_limit_rps": 10,
+        "max_concurrent": 5,
+        "billing_enabled": true
+      }
+    }
+  },
+  "agents": [
+    {
+      "id": "planner_agent",
+      "name": "规划助手",
+      "role": "planner",
+      "adapter_name": "openai",
+      "enabled": true
+    }
+  ],
+  "workflows": [],
+  "prompts": {},
+  "feature_flags": {},
+  "routing_rules": []
+}
+

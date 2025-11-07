@@ -173,7 +173,7 @@ kubectl rollout restart deployment/nexus -n nexus
 # 导入配置
 curl -X POST http://nexus.example.com/api/config/import \
   -H "Content-Type: application/json" \
-  -d @adapter_config_example.json
+  -d @config/config.example.json
 
 # 热重载适配器
 curl -X PUT http://nexus.example.com/api/config/reload/adapter \
@@ -271,9 +271,51 @@ kubectl exec -it deployment/nexus -n nexus -- /bin/sh
 kubectl top pods -n nexus
 ```
 
+## 📁 部署目录结构
+
+```
+deploy/
+├── README.md                    # 部署总览
+├── scripts/                     # 部署脚本
+│   ├── deploy.sh               # 通用部署脚本
+│   ├── canary-deploy.sh        # 金丝雀部署
+│   ├── rollback.sh             # 回滚脚本
+│   ├── health-check.sh         # 健康检查脚本
+│   └── update-config.sh        # 配置更新脚本
+├── environments/                # 环境配置
+│   ├── base/                   # 基础配置（通用）
+│   ├── development/            # 开发环境
+│   ├── staging/                # 测试环境
+│   └── production/             # 生产环境
+├── k8s/                        # Kubernetes 配置
+│   ├── core/                   # 核心资源
+│   ├── dependencies/           # 依赖服务
+│   ├── adapters/               # 适配器相关
+│   ├── networking/             # 网络配置
+│   ├── autoscaling/            # 自动扩缩容
+│   ├── policies/               # 策略配置
+│   └── jobs/                   # Job 资源
+├── monitoring/                 # 监控配置
+│   ├── prometheus/
+│   └── grafana/
+├── logging/                    # 日志配置
+├── ci-cd/                      # CI/CD 配置
+├── helm/                       # Helm Chart
+└── docker/                     # Docker 配置
+```
+
+### 设计原则
+
+1. **环境隔离**：按环境（dev、staging、prod）组织配置
+2. **功能分类**：按功能和服务分类组织文件
+3. **模块化配置**：配置文件模块化，易于复用
+4. **CI/CD 友好**：便于 CI/CD 流水线集成
+
 ## 📚 更多信息
 
 详细文档请参考：
-- [deploy/README.md](deploy/README.md) - 完整部署文档
-- [adapter_config_example.json](adapter_config_example.json) - 适配器配置示例
+- [环境变量配置](./ENV.md) - 环境变量配置说明
+- [快速启动指南](./QUICKSTART.md) - 快速启动和配置
+- [deploy/README.md](../deploy/README.md) - 完整部署文档
+- [config.example.json](../config/config.example.json) - 统一配置示例
 

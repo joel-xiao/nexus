@@ -1,9 +1,9 @@
-use redis::{Client, AsyncCommands};
+use anyhow::Result;
+use redis::{AsyncCommands, Client};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, error, debug};
-use serde::{Serialize, Deserialize};
-use anyhow::Result;
+use tracing::{debug, error, info};
 
 #[derive(Clone)]
 pub struct RedisCache {
@@ -24,9 +24,12 @@ impl RedisCache {
                 Ok(c) => {
                     info!("Redis connection initialized: {}", url);
                     Some(c)
-                },
+                }
                 Err(e) => {
-                    error!("Failed to connect to Redis: {}, using in-memory fallback", e);
+                    error!(
+                        "Failed to connect to Redis: {}, using in-memory fallback",
+                        e
+                    );
                     None
                 }
             }
@@ -53,11 +56,10 @@ impl RedisCache {
         if let Some(client) = client.as_ref() {
             let mut conn = client.get_multiplexed_async_connection().await?;
             let value: Option<String> = conn.get(self.key(key)).await?;
-            
+
             if let Some(v) = value {
                 let entry: CacheEntry<T> = serde_json::from_str(&v)?;
-                
-                // 检查过期
+
                 if let Some(expires) = entry.expires_at {
                     let now = chrono::Utc::now().timestamp();
                     if now > expires {
@@ -66,7 +68,7 @@ impl RedisCache {
                         return Ok(None);
                     }
                 }
-                
+
                 return Ok(Some(entry.value));
             }
         }
@@ -80,24 +82,19 @@ impl RedisCache {
         let client = self.client.read().await;
         if let Some(client) = client.as_ref() {
             let mut conn = client.get_multiplexed_async_connection().await?;
-            
-            let expires_at = ttl_seconds.map(|ttl| {
-                chrono::Utc::now().timestamp() + ttl as i64
-            });
-            
-            let entry = CacheEntry {
-                value,
-                expires_at,
-            };
-            
+
+            let expires_at = ttl_seconds.map(|ttl| chrono::Utc::now().timestamp() + ttl as i64);
+
+            let entry = CacheEntry { value, expires_at };
+
             let json = serde_json::to_string(&entry)?;
-            
+
             if let Some(ttl) = ttl_seconds {
                 conn.set_ex::<_, _, ()>(self.key(key), json, ttl).await?;
             } else {
                 conn.set::<_, _, ()>(self.key(key), json).await?;
             }
-            
+
             debug!("Cached key: {} (ttl: {:?})", key, ttl_seconds);
         }
         Ok(())
@@ -129,4 +126,3 @@ impl Default for RedisCache {
         Self::new(None, "nexus")
     }
 }
-

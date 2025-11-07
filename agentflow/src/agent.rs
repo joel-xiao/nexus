@@ -1,79 +1,45 @@
-/// Agent 定义模块
-/// 
-/// 定义了 Agent 的核心接口和配置结构
-
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use async_trait::async_trait;
 
-/// Agent 角色类型
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentRole {
-    /// 用户代理
     User,
-    /// 助手
     Assistant,
-    /// 规划者 - 负责任务规划
     Planner,
-    /// 执行者 - 负责具体执行
     Executor,
-    /// 审查者 - 负责结果审查
     Reviewer,
-    /// 协调者 - 协调多个代理
     Coordinator,
-    /// 专家 - 特定领域专家
-    Expert {
-        domain: String
-    },
-    /// 自定义角色
-    Custom {
-        role_name: String
-    },
+    Expert { domain: String },
+    Custom { role_name: String },
 }
 
-/// Agent 能力定义
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentCapability {
-    /// 能力名称
     pub name: String,
-    /// 能力描述
     pub description: String,
-    /// 是否启用
     pub enabled: bool,
-    /// 能力参数
     #[serde(default)]
     pub parameters: HashMap<String, serde_json::Value>,
 }
 
-/// Agent 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
-    /// Agent 唯一标识
     pub id: String,
-    /// Agent 名称
     pub name: String,
-    /// Agent 角色
     pub role: AgentRole,
-    /// Agent 描述
     pub description: String,
-    /// 系统提示词
     pub system_prompt: String,
-    /// 使用的适配器名称
     pub adapter_name: String,
-    /// 能力列表
     #[serde(default)]
     pub capabilities: Vec<AgentCapability>,
-    /// 最大交互轮数
     #[serde(default)]
     pub max_turns: Option<usize>,
-    /// 温度参数（0.0-1.0）
     #[serde(default)]
     pub temperature: Option<f32>,
-    /// 是否启用
     #[serde(default = "default_enabled")]
     pub enabled: bool,
-    /// 额外配置
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -127,40 +93,26 @@ impl AgentConfig {
     }
 }
 
-/// Agent 消息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMessage {
-    /// 消息 ID
     pub id: String,
-    /// 发送者 Agent ID
     pub sender_id: String,
-    /// 发送者 Agent 名称
     pub sender_name: String,
-    /// 接收者 Agent ID（None 表示广播）
     pub receiver_id: Option<String>,
-    /// 消息内容
     pub content: String,
-    /// 消息类型
     pub message_type: MessageType,
-    /// 元数据
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
-    /// 时间戳
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageType {
-    /// 普通文本消息
     Text,
-    /// 系统消息
     System,
-    /// 任务消息
     Task,
-    /// 结果消息
     Result,
-    /// 错误消息
     Error,
 }
 
@@ -190,14 +142,10 @@ impl AgentMessage {
     }
 }
 
-/// Agent 上下文
 #[derive(Debug, Clone)]
 pub struct AgentContext {
-    /// 会话历史
     pub conversation_history: Vec<AgentMessage>,
-    /// 共享状态
     pub shared_state: HashMap<String, serde_json::Value>,
-    /// Agent 本地状态
     pub local_state: HashMap<String, serde_json::Value>,
 }
 
@@ -246,18 +194,12 @@ impl Default for AgentContext {
     }
 }
 
-/// Agent 响应
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentResponse {
-    /// 响应消息
     pub message: AgentMessage,
-    /// 是否继续对话
     pub should_continue: bool,
-    /// 建议的下一个 Agent ID
     pub next_agent_id: Option<String>,
-    /// 置信度（0.0-1.0）
     pub confidence: Option<f32>,
-    /// 额外数据
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -294,54 +236,47 @@ impl AgentResponse {
     }
 }
 
-/// Agent trait - 所有 Agent 必须实现
 #[async_trait]
 pub trait AgentFlowAgent: Send + Sync {
-    /// 获取 Agent 配置
     fn config(&self) -> &AgentConfig;
 
-    /// 获取 Agent ID
     fn id(&self) -> &str {
         &self.config().id
     }
 
-    /// 获取 Agent 名称
     fn name(&self) -> &str {
         &self.config().name
     }
 
-    /// 处理消息
     async fn process(
         &self,
         message: AgentMessage,
         context: &mut AgentContext,
     ) -> anyhow::Result<AgentResponse>;
 
-    /// 检查是否可以处理此消息
     async fn can_handle(&self, message: &AgentMessage) -> bool {
-        // 默认：检查是否是发给自己的消息或广播消息
-        message.receiver_id.as_ref().map_or(true, |id| id == self.id())
+        message
+            .receiver_id
+            .as_ref()
+            .map_or(true, |id| id == self.id())
     }
 
-    /// 构建提示词（供实现使用）
     fn build_prompt(&self, message: &AgentMessage, context: &AgentContext) -> String {
-        let mut prompt = String::new();
-        
-        // 添加系统提示
-        prompt.push_str(&format!("系统角色: {}\n", self.config().system_prompt));
-        prompt.push_str(&format!("当前任务: {}\n\n", message.content));
-        
-        // 添加对话历史（最近5条）
+        let mut prompt = format!(
+            "系统角色: {}\n当前任务: {}\n\n",
+            self.config().system_prompt,
+            message.content
+        );
+
         let recent_messages = context.get_last_n_messages(5);
         if !recent_messages.is_empty() {
             prompt.push_str("最近对话:\n");
             for msg in recent_messages {
                 prompt.push_str(&format!("[{}]: {}\n", msg.sender_name, msg.content));
             }
-            prompt.push_str("\n");
+            prompt.push('\n');
         }
-        
+
         prompt
     }
 }
-

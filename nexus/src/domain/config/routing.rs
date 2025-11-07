@@ -1,9 +1,9 @@
-use serde::{Serialize, Deserialize};
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use dashmap::DashMap;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, utoipa::ToSchema)]
@@ -57,9 +57,13 @@ impl ModelRouter {
         info!("Added routing rule: {} ({:?})", rule.name, rule.strategy);
     }
 
-    pub async fn select_model(&self, user_id: Option<&str>, context: Option<&HashMap<String, serde_json::Value>>) -> Option<(String, String)> {
+    pub async fn select_model(
+        &self,
+        user_id: Option<&str>,
+        context: Option<&HashMap<String, serde_json::Value>>,
+    ) -> Option<(String, String)> {
         let rules = self.rules.read().await;
-        
+
         for rule in rules.iter() {
             if let Some(ref condition) = rule.condition {
                 if !self.evaluate_condition(condition, context) {
@@ -67,41 +71,32 @@ impl ModelRouter {
                 }
             }
 
-            let enabled_models: Vec<&ModelWeight> = rule.models
-                .iter()
-                .filter(|m| m.enabled)
-                .collect();
+            let enabled_models: Vec<&ModelWeight> =
+                rule.models.iter().filter(|m| m.enabled).collect();
 
             if enabled_models.is_empty() {
                 continue;
             }
 
             let selected = match rule.strategy {
-                RoutingStrategy::RoundRobin => {
-                    self.select_round_robin(&rule.name, &enabled_models)
-                },
-                RoutingStrategy::Random => {
-                    self.select_random(&enabled_models)
-                },
-                RoutingStrategy::Weighted => {
-                    self.select_weighted(&enabled_models)
-                },
+                RoutingStrategy::RoundRobin => self.select_round_robin(&rule.name, &enabled_models),
+                RoutingStrategy::Random => self.select_random(&enabled_models),
+                RoutingStrategy::Weighted => self.select_weighted(&enabled_models),
                 RoutingStrategy::LeastConnections => {
                     self.select_least_connections(&enabled_models).await
-                },
-                RoutingStrategy::UserBased => {
-                    self.select_user_based(user_id, &enabled_models)
-                },
-                RoutingStrategy::HashBased => {
-                    self.select_hash_based(user_id, &enabled_models)
-                },
+                }
+                RoutingStrategy::UserBased => self.select_user_based(user_id, &enabled_models),
+                RoutingStrategy::HashBased => self.select_hash_based(user_id, &enabled_models),
             };
 
             if let Some((model, adapter)) = selected {
                 let mut counts = self.connection_counts.write().await;
                 *counts.entry(model.clone()).or_insert(0) += 1;
-                
-                debug!("Selected model: {} (adapter: {}) for rule {}", model, adapter, rule.name);
+
+                debug!(
+                    "Selected model: {} (adapter: {}) for rule {}",
+                    model, adapter, rule.name
+                );
                 return Some((model, adapter));
             }
         }
@@ -110,8 +105,13 @@ impl ModelRouter {
         None
     }
 
-    fn select_round_robin(&self, rule_name: &str, models: &[&ModelWeight]) -> Option<(String, String)> {
-        let mut idx = self.round_robin_index
+    fn select_round_robin(
+        &self,
+        rule_name: &str,
+        models: &[&ModelWeight],
+    ) -> Option<(String, String)> {
+        let mut idx = self
+            .round_robin_index
             .entry(rule_name.to_string())
             .or_insert_with(|| 0);
         let selected = models[*idx % models.len()];
@@ -154,13 +154,18 @@ impl ModelRouter {
 
     async fn select_least_connections(&self, models: &[&ModelWeight]) -> Option<(String, String)> {
         let counts = self.connection_counts.read().await;
-        let selected = models.iter()
+        let selected = models
+            .iter()
             .min_by_key(|m| counts.get(&m.model_name).unwrap_or(&0))
             .map(|m| (m.model_name.clone(), m.adapter_name.clone()));
         selected
     }
 
-    fn select_user_based(&self, user_id: Option<&str>, models: &[&ModelWeight]) -> Option<(String, String)> {
+    fn select_user_based(
+        &self,
+        user_id: Option<&str>,
+        models: &[&ModelWeight],
+    ) -> Option<(String, String)> {
         if let Some(uid) = user_id {
             use std::collections::hash_map::DefaultHasher;
             use std::hash::{Hash, Hasher};
@@ -175,7 +180,11 @@ impl ModelRouter {
         }
     }
 
-    fn select_hash_based(&self, user_id: Option<&str>, models: &[&ModelWeight]) -> Option<(String, String)> {
+    fn select_hash_based(
+        &self,
+        user_id: Option<&str>,
+        models: &[&ModelWeight],
+    ) -> Option<(String, String)> {
         let key = user_id.unwrap_or("default");
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -187,7 +196,11 @@ impl ModelRouter {
         Some((selected.model_name.clone(), selected.adapter_name.clone()))
     }
 
-    fn evaluate_condition(&self, _condition: &str, context: Option<&HashMap<String, serde_json::Value>>) -> bool {
+    fn evaluate_condition(
+        &self,
+        _condition: &str,
+        context: Option<&HashMap<String, serde_json::Value>>,
+    ) -> bool {
         if let Some(_ctx) = context {
             true
         } else {
@@ -220,4 +233,3 @@ impl Default for ModelRouter {
         Self::new()
     }
 }
-
