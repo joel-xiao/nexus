@@ -5,8 +5,6 @@ use crate::routes::handlers::config::flags as handlers;
 use std::sync::Arc;
 use crate::state::AppState;
 
-// ===== 带 OpenAPI 注解的包装函数（路径和 OpenAPI 定义在一起） =====
-
 /// 创建 Feature Flag
 #[utoipa::path(
     post,
@@ -121,8 +119,6 @@ pub async fn check_flag(
     handlers::check_flag(Extension(state), axum::extract::Path(name)).await
 }
 
-// ===== OpenAPI 类型定义 =====
-
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CreateFlagRequest {
     /// 标志名称
@@ -162,7 +158,6 @@ pub struct FlagResponse {
     pub enabled: bool,
 }
 
-// ===== OpenAPI 文档片段 =====
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -184,9 +179,6 @@ pub struct FlagResponse {
 )]
 pub struct FlagsApiDoc;
 
-// ===== 路由定义（路径 + OpenAPI 在一起） =====
-
-/// 注册 flags 相关的路由
 pub fn flags_routes() -> Router {
     Router::new()
         .route("/flags", post(create_flag))

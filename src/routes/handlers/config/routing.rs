@@ -3,9 +3,8 @@ use crate::state::AppState;
 use crate::domain::config::routing::{RoutingRule, RoutingStrategy};
 use std::sync::Arc;
 use super::common::{ok_response, ok_response_with_message, error_response};
-use crate::routes::config::routing::CreateRuleRequest;
+use crate::routes::config::routing::{CreateRuleRequest, UpdateRuleRequest};
 
-// 辅助函数：解析路由策略
 fn parse_routing_strategy(strategy: &str) -> RoutingStrategy {
     match strategy {
         "round_robin" => RoutingStrategy::RoundRobin,
@@ -17,8 +16,6 @@ fn parse_routing_strategy(strategy: &str) -> RoutingStrategy {
         _ => RoutingStrategy::RoundRobin,
     }
 }
-
-// ===== 业务逻辑处理函数 =====
 
 pub async fn create_routing_rule(
     Extension(state): Extension<Arc<AppState>>,
@@ -58,7 +55,7 @@ pub async fn get_routing_rule(
 pub async fn update_routing_rule(
     Extension(state): Extension<Arc<AppState>>,
     axum::extract::Path(name): axum::extract::Path<String>,
-    Json(payload): Json<CreateRuleRequest>,
+    Json(payload): Json<UpdateRuleRequest>,
 ) -> Json<serde_json::Value> {
     let strategy = parse_routing_strategy(&payload.strategy);
     let rule = RoutingRule {

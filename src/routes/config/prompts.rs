@@ -5,17 +5,12 @@ use crate::routes::handlers::config::prompts as handlers;
 use std::sync::Arc;
 use crate::state::AppState;
 
-// ===== 路由定义（路径 + OpenAPI 在一起） =====
-
-/// 注册 prompts 相关的路由
 pub fn prompts_routes() -> Router {
     Router::new()
         .route("/prompts", get(list_prompts))
         .route("/prompts/{name}", get(get_prompt))
         .route("/prompts/{name}", delete(delete_prompt))
 }
-
-// ===== 带 OpenAPI 注解的包装函数（路径和 OpenAPI 定义在一起） =====
 
 /// 列出所有提示词
 #[utoipa::path(
@@ -71,7 +66,6 @@ pub async fn delete_prompt(
     handlers::delete_prompt(Extension(state), axum::extract::Path(name)).await
 }
 
-// ===== OpenAPI 文档片段 =====
 #[derive(OpenApi)]
 #[openapi(
     paths(

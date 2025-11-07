@@ -12,6 +12,3 @@ pub fn mod_routes() -> Router {
         .merge(invoke::invoke_routes())
         .nest("/config", config::config_routes())
 }
-
-
-

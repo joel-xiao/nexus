@@ -8,8 +8,6 @@ use std::sync::Arc;
 use tracing::{info, error};
 use utoipa::ToSchema;
 
-// ===== 请求/响应类型定义 =====
-
 #[derive(Deserialize, ToSchema)]
 #[schema(example = json!({
     "input": "Hello, world!",
@@ -32,29 +30,23 @@ pub struct InvokeRequest {
 
 #[derive(Serialize, ToSchema)]
 pub struct InvokeResponse {
-    /// 处理结果
     #[schema(example = "Generated response")]
     pub result: String,
-    /// 创建的任务列表
     #[schema(example = json!([]))]
-    pub tasks: Vec<String>,
-    /// 实际使用的适配器名称
+    pub tasks: Vec<serde_json::Value>,
     #[schema(example = "mock")]
     pub adapter_used: String,
 }
 
-// ===== 业务逻辑处理函数 =====
-
 pub async fn invoke_handler(
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<InvokeRequest>,
-) -> Json<InvokeResponse> {
+) -> Json<serde_json::Value> {
+    use crate::routes::common::{ok_response, error_response};
     info!("Processing invoke request: {}", payload.input);
     
-    // 记录指标
     state.metrics.increment("invoke_requests_total");
     
-    // 审计日志
     state.audit_log.log_action(
         "invoke",
         "request",
@@ -64,18 +56,15 @@ pub async fn invoke_handler(
         serde_json::json!({"input": payload.input}),
     );
     
-    // 1. 使用 Planner 拆分任务
     let tasks = state.planner.split_task(&payload.input).await;
-    let task_messages: Vec<String> = tasks.iter()
-        .map(|t| serde_json::to_string(t).unwrap_or_default())
+    let task_messages: Vec<serde_json::Value> = tasks.iter()
+        .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
         .collect();
     
-    // 2. 发布到 MCP 消息总线
     for task in &tasks {
         let _msg_id = state.mcp_bus.publish(task.clone()).await;
     }
     
-    // 3. RAG: 从知识库检索相关文档
     let kb_results = state.knowledge_base.read().await.query(&payload.input).await;
     let context = if !kb_results.is_empty() {
         Some(kb_results.join("\n\n"))
@@ -83,7 +72,6 @@ pub async fn invoke_handler(
         None
     };
     
-    // 4. 使用 Prompt Store 渲染提示（如果有模板）
     let final_prompt = match state.prompt_store.write().await.render_string(
         "{{input}}{{#if context}}\n\n相关上下文：\n{{context}}{{/if}}",
         &serde_json::json!({
@@ -95,13 +83,9 @@ pub async fn invoke_handler(
             info!("Prompt rendered with template");
             rendered
         },
-        Err(_) => {
-            // 模板渲染失败，使用原始输入
-            payload.input.clone()
-        }
+        Err(_) => payload.input.clone()
     };
     
-    // 5. 创建一个异步任务并加入队列
     let task_payload = serde_json::json!({
         "input": final_prompt,
         "adapter": payload.adapter.as_deref().unwrap_or("mock"),
@@ -117,15 +101,10 @@ pub async fn invoke_handler(
         Ok(id) => id,
         Err(e) => {
             error!("Failed to enqueue task: {}", e);
-            return Json(InvokeResponse {
-                result: "Failed to queue task".to_string(),
-                tasks: task_messages,
-                adapter_used: "none".to_string(),
-            });
+            return error_response("Failed to queue task");
         }
     };
     
-    // 发布事件
     let event = Event::new(
         "task.enqueued".to_string(),
         "invoke_handler".to_string(),
@@ -134,7 +113,6 @@ pub async fn invoke_handler(
     );
     state.event_bus.publish(event);
     
-    // 6. 使用路由策略选择模型（如果指定了用户ID）
     let user_id = payload.user_id.as_deref();
     let adapter_name = if let Some(adapter) = payload.adapter.as_deref() {
         adapter.to_string()
@@ -145,19 +123,16 @@ pub async fn invoke_handler(
         }
     };
     
-    // 创建处理上下文
     let mut context = ProcessingContext::new(
         payload.user_id.clone(),
         adapter_name.clone(),
         final_prompt.clone(),
     );
     
-    // 预处理：执行后处理器链的预处理
     if let Err(e) = state.postprocessor_chain.pre_process(&mut context).await {
         error!("Pre-processing failed: {}", e);
     }
     
-    // 使用处理后的输入（如果有）或原始输入
     let prompt_to_use = context.processed_input.as_ref()
         .unwrap_or(&final_prompt);
     
@@ -193,16 +168,14 @@ pub async fn invoke_handler(
         }
     };
     
-    // 后处理：执行后处理器链的后处理
     if let Err(e) = state.postprocessor_chain.post_process(&mut context).await {
         error!("Post-processing failed: {}", e);
     }
     
-    // 使用处理后的输出（如果有）或原始输出
     let final_result = context.processed_output
         .unwrap_or_else(|| context.original_output.clone());
     
-    Json(InvokeResponse {
+    ok_response(InvokeResponse {
         result: final_result,
         tasks: task_messages,
         adapter_used: adapter_name.to_string(),

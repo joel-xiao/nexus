@@ -6,8 +6,6 @@ use tracing::error;
 use super::common::{ok_response_with_message, error_response};
 use crate::routes::config::reload::{ReloadAdapterRequest, ReloadPromptRequest};
 
-// ===== 业务逻辑处理函数 =====
-
 pub async fn hot_reload_adapter(
     Extension(state): Extension<Arc<AppState>>,
     Json(payload): Json<ReloadAdapterRequest>,

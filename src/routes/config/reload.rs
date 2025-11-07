@@ -5,8 +5,6 @@ use crate::routes::handlers::config::reload as handlers;
 use std::sync::Arc;
 use crate::state::AppState;
 
-// ===== 带 OpenAPI 注解的包装函数（路径和 OpenAPI 定义在一起） =====
-
 /// 热重载适配器配置
 #[utoipa::path(
     put,
@@ -41,8 +39,6 @@ pub async fn hot_reload_prompt(
     handlers::hot_reload_prompt(Extension(state), axum::Json(payload)).await
 }
 
-// ===== OpenAPI 类型定义 =====
-
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct ReloadAdapterRequest {
     /// 适配器名称
@@ -75,7 +71,6 @@ pub struct ReloadPromptRequest {
     pub enabled: bool,
 }
 
-// ===== OpenAPI 文档片段 =====
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -92,9 +87,6 @@ pub struct ReloadPromptRequest {
 )]
 pub struct ReloadApiDoc;
 
-// ===== 路由定义（路径 + OpenAPI 在一起） =====
-
-/// 注册 reload 相关的路由
 pub fn reload_routes() -> Router {
     Router::new()
         .route("/reload/adapter", put(hot_reload_adapter))

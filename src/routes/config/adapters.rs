@@ -5,9 +5,6 @@ use crate::routes::handlers::config::adapters as handlers;
 use std::sync::Arc;
 use crate::state::AppState;
 
-// ===== 路由定义（路径 + OpenAPI 在一起） =====
-
-/// 注册 adapters 相关的路由
 pub fn adapters_routes() -> Router {
     Router::new()
         .route("/adapters", get(list_adapters))
@@ -15,8 +12,6 @@ pub fn adapters_routes() -> Router {
         .route("/adapters/{name}", delete(delete_adapter))
         .route("/adapters/{name}/billing", get(get_billing_stats))
 }
-
-// ===== 带 OpenAPI 注解的包装函数（路径和 OpenAPI 定义在一起） =====
 
 /// 列出所有适配器
 #[utoipa::path(
@@ -91,7 +86,6 @@ pub async fn get_billing_stats(
     handlers::get_billing_stats(Extension(state), axum::extract::Path(adapter_name)).await
 }
 
-// ===== OpenAPI 文档片段 =====
 #[derive(OpenApi)]
 #[openapi(
     paths(

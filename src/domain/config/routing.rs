@@ -7,13 +7,14 @@ use tracing::{info, debug, warn};
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum RoutingStrategy {
-    RoundRobin,      // 轮询
-    Random,          // 随机
-    Weighted,        // 加权
-    LeastConnections, // 最少连接
-    UserBased,       // 基于用户
-    HashBased,       // 基于哈希
+    RoundRobin,
+    Random,
+    Weighted,
+    LeastConnections,
+    UserBased,
+    HashBased,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
@@ -21,7 +22,7 @@ pub struct RoutingRule {
     pub name: String,
     pub strategy: RoutingStrategy,
     pub models: Vec<ModelWeight>,
-    pub condition: Option<String>, // JSON 条件表达式
+    pub condition: Option<String>,
     pub priority: u32,
 }
 
@@ -52,7 +53,6 @@ impl ModelRouter {
     pub async fn add_rule(&self, rule: RoutingRule) {
         let mut rules = self.rules.write().await;
         rules.push(rule.clone());
-        // 按优先级排序
         rules.sort_by(|a, b| b.priority.cmp(&a.priority));
         info!("Added routing rule: {} ({:?})", rule.name, rule.strategy);
     }
@@ -60,16 +60,13 @@ impl ModelRouter {
     pub async fn select_model(&self, user_id: Option<&str>, context: Option<&HashMap<String, serde_json::Value>>) -> Option<(String, String)> {
         let rules = self.rules.read().await;
         
-        // 查找匹配的规则
         for rule in rules.iter() {
-            // 检查条件
             if let Some(ref condition) = rule.condition {
                 if !self.evaluate_condition(condition, context) {
                     continue;
                 }
             }
 
-            // 只考虑启用的模型
             let enabled_models: Vec<&ModelWeight> = rule.models
                 .iter()
                 .filter(|m| m.enabled)
@@ -79,7 +76,6 @@ impl ModelRouter {
                 continue;
             }
 
-            // 根据策略选择模型
             let selected = match rule.strategy {
                 RoutingStrategy::RoundRobin => {
                     self.select_round_robin(&rule.name, &enabled_models)
@@ -102,7 +98,6 @@ impl ModelRouter {
             };
 
             if let Some((model, adapter)) = selected {
-                // 更新连接计数
                 let mut counts = self.connection_counts.write().await;
                 *counts.entry(model.clone()).or_insert(0) += 1;
                 
@@ -193,11 +188,8 @@ impl ModelRouter {
     }
 
     fn evaluate_condition(&self, _condition: &str, context: Option<&HashMap<String, serde_json::Value>>) -> bool {
-        // 简单的条件评估（可以扩展为更复杂的表达式引擎）
         if let Some(_ctx) = context {
-            // 示例：检查 context 中是否有特定字段
-            // 实际实现可以使用 jmespath 或类似库
-            true // 简化实现
+            true
         } else {
             false
         }

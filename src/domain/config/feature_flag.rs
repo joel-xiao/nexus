@@ -7,6 +7,7 @@ use dashmap::DashMap;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum FlagStatus {
     Enabled,
     Disabled,

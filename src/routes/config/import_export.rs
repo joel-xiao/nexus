@@ -5,8 +5,6 @@ use crate::routes::handlers::config::import_export as handlers;
 use std::sync::Arc;
 use crate::state::AppState;
 
-// ===== 带 OpenAPI 注解的包装函数（路径和 OpenAPI 定义在一起） =====
-
 /// 导出配置
 #[utoipa::path(
     get,
@@ -39,7 +37,6 @@ pub async fn import_config(
     handlers::import_config(Extension(state), axum::Json(payload)).await
 }
 
-// ===== OpenAPI 文档片段 =====
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -51,8 +48,6 @@ pub async fn import_config(
     )
 )]
 pub struct ImportExportApiDoc;
-
-// ===== 路由定义（路径 + OpenAPI 在一起） =====
 
 /// 注册 import_export 相关的路由
 pub fn import_export_routes() -> Router {

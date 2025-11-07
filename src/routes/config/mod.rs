@@ -24,7 +24,6 @@ pub fn config_routes() -> Router {
         .merge(import_export::import_export_routes())
 }
 
-// ===== OpenAPI 文档组合 =====
 use utoipa::openapi::OpenApi as OpenApiStruct;
 
 /// 组合所有 config 子模块的 OpenAPI 文档

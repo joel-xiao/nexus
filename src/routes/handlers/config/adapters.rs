@@ -3,12 +3,20 @@ use crate::state::AppState;
 use std::sync::Arc;
 use super::common::{ok_response, error_response, ok_response_with_message};
 
-// ===== 业务逻辑处理函数 =====
-
 pub async fn list_adapters(
-    Extension(_state): Extension<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
 ) -> Json<serde_json::Value> {
-    let adapters = _state.adapter_registry.read().await.list().await;
+    let config = state.config_manager.get_config().await;
+    let adapters: Vec<serde_json::Value> = config.adapters.values().map(|adapter| {
+        serde_json::json!({
+            "name": adapter.name,
+            "api_key": adapter.api_key,
+            "model": adapter.model,
+            "base_url": adapter.base_url,
+            "enabled": adapter.enabled
+        })
+    }).collect();
+    
     ok_response(serde_json::json!({ "adapters": adapters }))
 }
 
@@ -17,7 +25,16 @@ pub async fn get_adapter(
     axum::extract::Path(name): axum::extract::Path<String>,
 ) -> Json<serde_json::Value> {
     match state.config_manager.get_adapter_config(&name).await {
-        Some(config) => ok_response(serde_json::json!({ "adapter": config })),
+        Some(config) => {
+            let adapter = serde_json::json!({
+                "name": config.name,
+                "api_key": config.api_key,
+                "model": config.model,
+                "base_url": config.base_url,
+                "enabled": config.enabled
+            });
+            ok_response(serde_json::json!({ "adapter": adapter }))
+        },
         None => error_response(&format!("Adapter {} not found", name))
     }
 }
@@ -40,11 +57,13 @@ pub async fn delete_adapter(
 
 pub async fn get_billing_stats(
     Extension(_state): Extension<Arc<AppState>>,
-    axum::extract::Path(adapter_name): axum::extract::Path<String>,
+    axum::extract::Path(_adapter_name): axum::extract::Path<String>,
 ) -> Json<serde_json::Value> {
-    // TODO: 从 billing tracker 获取统计
     ok_response(serde_json::json!({
-        "adapter": adapter_name,
-        "stats": {}
+        "stats": {
+            "total_tokens": 0,
+            "total_cost": 0.0,
+            "requests": 0
+        }
     }))
 }

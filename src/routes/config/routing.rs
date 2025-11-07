@@ -5,8 +5,6 @@ use crate::routes::handlers::config::routing as handlers;
 use std::sync::Arc;
 use crate::state::AppState;
 
-// ===== 带 OpenAPI 注解的包装函数（路径和 OpenAPI 定义在一起） =====
-
 /// 创建路由规则
 #[utoipa::path(
     post,
@@ -67,7 +65,7 @@ pub async fn get_routing_rule(
     params(
         ("name" = String, Path, description = "规则名称")
     ),
-    request_body = CreateRuleRequest,
+    request_body = UpdateRuleRequest,
     responses(
         (status = 200, description = "成功更新路由规则")
     )
@@ -75,7 +73,7 @@ pub async fn get_routing_rule(
 pub async fn update_routing_rule(
     Extension(state): Extension<Arc<AppState>>,
     axum::extract::Path(name): axum::extract::Path<String>,
-    Json(payload): Json<CreateRuleRequest>,
+    Json(payload): Json<UpdateRuleRequest>,
 ) -> Json<serde_json::Value> {
     handlers::update_routing_rule(Extension(state), axum::extract::Path(name), Json(payload)).await
 }
@@ -99,7 +97,6 @@ pub async fn delete_routing_rule(
     handlers::delete_routing_rule(Extension(state), axum::extract::Path(name)).await
 }
 
-// ===== OpenAPI 类型定义 =====
 use crate::domain::config::routing::ModelWeight;
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -117,7 +114,18 @@ pub struct CreateRuleRequest {
     pub priority: Option<u32>,
 }
 
-// ===== OpenAPI 文档片段 =====
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct UpdateRuleRequest {
+    /// 路由策略: "round_robin", "random", "weighted", "least_connections", "user_based", "hash_based"
+    #[schema(example = "round_robin")]
+    pub strategy: String,
+    /// 模型权重列表
+    pub models: Vec<ModelWeight>,
+    /// 优先级，数字越大优先级越高
+    #[schema(example = 100)]
+    pub priority: Option<u32>,
+}
+
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -129,6 +137,7 @@ pub struct CreateRuleRequest {
     ),
     components(schemas(
         CreateRuleRequest,
+        UpdateRuleRequest,
     )),
     tags(
         (name = "config-routing", description = "路由规则管理"),
@@ -136,9 +145,6 @@ pub struct CreateRuleRequest {
 )]
 pub struct RoutingApiDoc;
 
-// ===== 路由定义（路径 + OpenAPI 在一起） =====
-
-/// 注册 routing 相关的路由
 pub fn routing_routes() -> Router {
     Router::new()
         .route("/routing/rules", post(create_routing_rule))

@@ -1,8 +1,6 @@
 use axum::Json;
 use serde::Serialize;
 
-// ===== 通用响应辅助函数 =====
-
 /// 创建成功响应
 pub fn ok_response<T: Serialize>(data: T) -> Json<serde_json::Value> {
     Json(serde_json::json!({

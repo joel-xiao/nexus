@@ -4,9 +4,8 @@ use crate::domain::config::feature_flag::FeatureFlag;
 use std::sync::Arc;
 use super::common::{ok_response, ok_response_with_message, error_response};
 use crate::routes::config::flags::{CreateFlagRequest, UpdateFlagRequest, FlagResponse};
-
-// 辅助函数：解析标志状态
 use crate::domain::config::feature_flag::FlagStatus;
+
 fn parse_flag_status(status: &str, percentage: Option<u8>) -> FlagStatus {
     match status {
         "enabled" => FlagStatus::Enabled,
@@ -17,8 +16,6 @@ fn parse_flag_status(status: &str, percentage: Option<u8>) -> FlagStatus {
         _ => FlagStatus::Disabled,
     }
 }
-
-// ===== 业务逻辑处理函数 =====
 
 pub async fn create_flag(
     Extension(state): Extension<Arc<AppState>>,
