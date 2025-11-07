@@ -102,13 +102,32 @@ impl GenericAdapter {
         if let Some(ref template) = self.request_config.body_template {
             let mut body = template.clone();
             
-            // 简单的变量替换
-            let body_str = serde_json::to_string(&body)?;
-            let body_str = body_str.replace("{model}", &self.model);
-            let body_str = body_str.replace("{prompt}", prompt);
-            let body_str = body_str.replace("{message}", prompt);
+            // Use proper JSON manipulation instead of string replacement
+            // This avoids control character issues
+            fn replace_in_value(value: &mut Value, model: &str, prompt: &str) {
+                match value {
+                    Value::String(s) => {
+                        if s == "{model}" {
+                            *s = model.to_string();
+                        } else if s == "{prompt}" || s == "{message}" {
+                            *s = prompt.to_string();
+                        }
+                    }
+                    Value::Array(arr) => {
+                        for item in arr {
+                            replace_in_value(item, model, prompt);
+                        }
+                    }
+                    Value::Object(obj) => {
+                        for (_key, val) in obj {
+                            replace_in_value(val, model, prompt);
+                        }
+                    }
+                    _ => {}
+                }
+            }
             
-            body = serde_json::from_str(&body_str)?;
+            replace_in_value(&mut body, &self.model, prompt);
             
             // 如果模板中有嵌套结构，尝试设置模型和消息字段
             if let Some(obj) = body.as_object_mut() {
@@ -178,7 +197,11 @@ impl GenericAdapter {
         
         match current {
             Value::String(s) => Ok(s.clone()),
-            _ => Ok(current.to_string()),
+            _ => {
+                // Use serde_json to properly serialize non-string values
+                serde_json::to_string(current)
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize response value: {}", e))
+            }
         }
     }
 }
@@ -227,7 +250,18 @@ impl Adapter for GenericAdapter {
             anyhow::bail!("{} API error: {}", self.name, status);
         }
 
-        let result: Value = response.json().await?;
+        // Get response text first for better error handling
+        let response_text = response.text().await?;
+        
+        // Try to parse as JSON
+        let result: Value = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                error!("{} JSON parse error: {}", self.name, e);
+                error!("Response preview (first 200 chars): {}", 
+                    &response_text.chars().take(200).collect::<String>());
+                anyhow::anyhow!("Failed to parse response as JSON: {}", e)
+            })?;
+        
         self.extract_response(result)
     }
 
